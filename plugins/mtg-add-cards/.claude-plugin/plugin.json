@@ -1,0 +1,8 @@
+{
+  "name": "mtg-add-cards",
+  "description": "Add Magic: The Gathering cards to the user's collection.",
+  "version": "1.0.0",
+  "author": {
+    "name": "mattshoe"
+  }
+}

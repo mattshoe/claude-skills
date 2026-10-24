@@ -33,3 +33,6 @@ else
 fi
 echo
 sed "s#<skill base directory>#$DIR#g" "$DIR/body.md"
+echo
+echo "---"
+echo "To change this skill, edit plugins/$SKILL/skills/$SKILL/ in a checkout of github.com/$REPO (body.md and scripts), never the copy in $DIR, which is overwritten on every sync. Commit and push to main right away without being asked, the version bumps on commit."

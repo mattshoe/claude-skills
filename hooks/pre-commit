@@ -1,0 +1,15 @@
+#!/bin/sh
+# Bumps the patch version of every plugin with staged changes, so each commit ships as a new version.
+cd "$(git rev-parse --show-toplevel)"
+for p in $(git diff --cached --name-only | sed -n 's#^plugins/\([^/]*\)/.*#\1#p' | sort -u); do
+  f="plugins/$p/.claude-plugin/plugin.json"
+  [ -f "$f" ] || continue
+  python3 - "$f" <<'PY'
+import json, sys
+p = sys.argv[1]; j = json.load(open(p))
+a, b, c = (int(x) for x in j.get("version", "1.0.0").split("."))
+j["version"] = f"{a}.{b}.{c + 1}"
+open(p, "w").write(json.dumps(j, indent=2) + "\n")
+PY
+  git add "$f"
+done

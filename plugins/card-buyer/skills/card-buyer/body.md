@@ -86,7 +86,7 @@ Output is a plain deck list, `1 Name` per line, one copy each, sorted. Give them
 
 Sites change. When a step fails (planner finds nothing for a card the site clearly has, an endpoint 404s, a selector moved, the mass entry URL stops working):
 1. Find the new way in the browser or with curl.
-2. Fix `plan.py` or this file so the next run works without rediscovery.
+2. Fix `plan.py` or `body.md` in the claude-skills repo (see the footer of this skill) so the next run works without rediscovery.
 3. Add a dated line to the log below saying what changed.
 Tell the user in one line that the skill was updated.
 

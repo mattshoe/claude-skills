@@ -1,6 +1,7 @@
 {
   "name": "mtg-remove-cards",
   "description": "Remove Magic: The Gathering cards from the user's collection.",
+  "version": "1.2.1",
   "author": {
     "name": "mattshoe"
   }

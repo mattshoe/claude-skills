@@ -1,14 +1,20 @@
 #!/bin/sh
-# Opens a new tab in the terminal this session runs in and starts claude there.
-# Usage: new-session.sh [DIR] [PROMPT]. DIR defaults to the current directory.
+# Opens a new tab in the terminal this session runs in and starts a named claude session there with Remote Control on.
+# Usage: new-session.sh DIR NAME [PROMPT]. DIR "" means the current directory.
 DIR=${1:-$PWD}
-PROMPT=${2:-}
+NAME=${2:-}
+PROMPT=${3:-}
+if [ -z "$NAME" ]; then
+  echo "new-session: NAME is required" >&2
+  exit 3
+fi
 
 # Shell-quotes one argument.
 q() { printf "'%s'" "$(printf %s "$1" | sed "s/'/'\\\\''/g")"; }
 
-CMD="claude"
-[ -n "$PROMPT" ] && CMD="claude $(q "$PROMPT")"
+# --remote-control takes an optional value, so always give it the name or it eats the prompt.
+CMD="claude -n $(q "$NAME") --remote-control $(q "$NAME")"
+[ -n "$PROMPT" ] && CMD="$CMD $(q "$PROMPT")"
 
 if [ -n "${TMUX:-}" ]; then
   exec tmux new-window -c "$DIR" "$CMD; exec \$SHELL"

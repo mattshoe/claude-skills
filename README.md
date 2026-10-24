@@ -33,3 +33,9 @@ CARD_STOREPASS=store-two.example.com=STOREID
 ```
 
 Writes to a collection need `MTG_ADMIN_PASSWORD`, which only the deployment's owner has. Installing these skills gives no access to anyone else's collection.
+
+## Updates
+
+Each `SKILL.md` is a stub. On every invocation it runs `sync.sh`, which checks GitHub main and pulls that skill's `body.md` and scripts into `~/.cache/claude-skills/<skill>` when main has moved, then loads them. Edit `body.md`, push, and the next invocation anywhere runs it. If GitHub is unreachable it runs the last copy it fetched and says so.
+
+`sync.sh` lives at the repo root. After editing it, run `./build.sh` to copy it into every skill, and commit.

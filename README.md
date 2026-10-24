@@ -17,6 +17,7 @@ Claude Code skills for a Magic: The Gathering collection, packaged as a plugin m
 | mtg | system | maintain the API deployment itself |
 | mtg | card-buyer | fill local game store and TCGPlayer carts from a card list |
 | mattshoe | session-defaults | start every session with permissions bypassed and Remote Control on, any OS |
+| mattshoe | new-session | open a new tab in the current terminal and start claude there |
 
 ## Config
 

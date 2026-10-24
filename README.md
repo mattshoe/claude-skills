@@ -15,6 +15,7 @@ Claude Code skills for a Magic: The Gathering collection, packaged as a plugin m
 | mtg-build-deck | build a Commander deck from unassigned cards |
 | mtg-system | maintain the API deployment itself |
 | card-buyer | fill local game store and TCGPlayer carts from a card list |
+| session-defaults | start every session with permissions bypassed and Remote Control on, any OS |
 
 ## Config
 

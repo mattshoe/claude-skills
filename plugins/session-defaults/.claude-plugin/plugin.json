@@ -1,0 +1,8 @@
+{
+  "name": "session-defaults",
+  "description": "Make every Claude Code session start with permissions bypassed and Remote Control on.",
+  "version": "1.0.1",
+  "author": {
+    "name": "mattshoe"
+  }
+}

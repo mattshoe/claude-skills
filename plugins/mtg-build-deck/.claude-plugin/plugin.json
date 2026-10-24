@@ -1,7 +1,7 @@
 {
   "name": "mtg-build-deck",
   "description": "Build a Magic: The Gathering Commander deck for the user out of the cards they own but has not committed to a deck.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": {
     "name": "mattshoe"
   }

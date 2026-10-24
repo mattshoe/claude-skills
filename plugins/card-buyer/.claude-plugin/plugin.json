@@ -1,7 +1,7 @@
 {
   "name": "card-buyer",
   "description": "Requisition Magic the Gathering cards by adding them to the user's online carts at their local game stores in priority order (from CARD_STORES), then TCGPlayer for whatever is left.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": {
     "name": "mattshoe"
   }

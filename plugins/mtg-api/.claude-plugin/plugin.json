@@ -1,7 +1,7 @@
 {
   "name": "mtg-api",
   "description": "Read or change the user's Magic: The Gathering collection through the MTG REST API, which is the single source of truth for every card they own and every deck they have built.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": {
     "name": "mattshoe"
   }

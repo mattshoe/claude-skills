@@ -1,0 +1,8 @@
+{
+  "name": "mattshoe",
+  "description": "General Claude Code skills: session-defaults starts every session with permissions bypassed and Remote Control on.",
+  "version": "1.0.1",
+  "author": {
+    "name": "mattshoe"
+  }
+}

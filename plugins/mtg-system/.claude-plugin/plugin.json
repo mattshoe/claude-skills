@@ -1,8 +1,0 @@
-{
-  "name": "mtg-system",
-  "description": "Understand, diagnose and safely modify the machinery behind the user's MTG collection \u2014 the Cloudflare Worker, the D1 database, the web frontend, the daily maintenance job and the backups.",
-  "version": "1.2.1",
-  "author": {
-    "name": "mattshoe"
-  }
-}

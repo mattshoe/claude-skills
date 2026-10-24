@@ -5,39 +5,14 @@
   },
   "plugins": [
     {
-      "name": "card-buyer",
-      "source": "./plugins/card-buyer",
-      "description": "Requisition Magic the Gathering cards by adding them to the user's online carts at their local game stores in priority order (from CARD_STORES), then TCGPlayer for whatever is left."
+      "name": "mtg",
+      "source": "./plugins/mtg",
+      "description": "Magic: The Gathering skills: query and edit a collection through an MTG API deployment, build Commander decks from it, maintain the API, and fill store carts from a card list."
     },
     {
-      "name": "mtg-add-cards",
-      "source": "./plugins/mtg-add-cards",
-      "description": "Add Magic: The Gathering cards to the user's collection."
-    },
-    {
-      "name": "mtg-api",
-      "source": "./plugins/mtg-api",
-      "description": "Read or change the user's Magic: The Gathering collection through the MTG REST API, which is the single source of truth for every card they own and every deck they have built."
-    },
-    {
-      "name": "mtg-build-deck",
-      "source": "./plugins/mtg-build-deck",
-      "description": "Build a Magic: The Gathering Commander deck for the user out of the cards they own but has not committed to a deck."
-    },
-    {
-      "name": "mtg-remove-cards",
-      "source": "./plugins/mtg-remove-cards",
-      "description": "Remove Magic: The Gathering cards from the user's collection."
-    },
-    {
-      "name": "mtg-system",
-      "source": "./plugins/mtg-system",
-      "description": "Understand, diagnose and safely modify the machinery behind the user's MTG collection \u2014 the Cloudflare Worker, the D1 database, the web frontend, the daily maintenance job and the backups."
-    },
-    {
-      "name": "session-defaults",
-      "source": "./plugins/session-defaults",
-      "description": "Make every Claude Code session start with permissions bypassed and Remote Control on."
+      "name": "mattshoe",
+      "source": "./plugins/mattshoe",
+      "description": "General Claude Code skills: session-defaults starts every session with permissions bypassed and Remote Control on."
     }
   ],
   "metadata": {

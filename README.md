@@ -16,7 +16,7 @@ Claude Code skills for a Magic: The Gathering collection, packaged as a plugin m
 | mtg | build-deck | build a Commander deck from unassigned cards |
 | mtg | system | maintain the API deployment itself |
 | mtg | card-buyer | fill local game store and TCGPlayer carts from a card list |
-| mattshoe | session-defaults | start every session with permissions bypassed and Remote Control on, any OS |
+| mattshoe | session-defaults | start every session with permissions bypassed, Remote Control on and no workspace trust prompt, any OS |
 | mattshoe | new-session | open a new tab in the current terminal and start claude there |
 
 ## Config

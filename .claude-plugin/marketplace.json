@@ -12,7 +12,7 @@
     {
       "name": "mattshoe",
       "source": "./plugins/mattshoe",
-      "description": "General Claude Code skills: session-defaults starts every session with permissions bypassed and Remote Control on, new-session opens a new terminal tab running claude."
+      "description": "General Claude Code skills: session-defaults starts every session with permissions bypassed, Remote Control on and no trust prompt, new-session opens a new terminal tab running claude."
     }
   ],
   "metadata": {

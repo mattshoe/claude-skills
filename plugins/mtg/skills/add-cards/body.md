@@ -2,9 +2,9 @@
 
 The collection lives behind the REST API at
 `$MTG_API_URL`. It is the single source of truth.
-See the **mtg-api** skill for the database shape and query rules.
+See the **api** skill for the database shape and query rules.
 
-Adding needs an admin token. Get one from the password in `~/.mtg-api.env` (see Config in the mtg-api skill):
+Adding needs an admin token. Get one from the password in `~/.mtg-api.env` (see Config in the api skill):
 
 ```bash
 set -a; . ~/.mtg-api.env; set +a

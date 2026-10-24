@@ -10,11 +10,11 @@ Claude Code skills for a Magic: The Gathering collection, packaged as a plugin m
 
 | Plugin | Skill | What |
 |---|---|---|
-| mtg | mtg-api | read and query a collection through an MTG API deployment |
-| mtg | mtg-add-cards | add cards to the collection |
-| mtg | mtg-remove-cards | remove cards from the collection |
-| mtg | mtg-build-deck | build a Commander deck from unassigned cards |
-| mtg | mtg-system | maintain the API deployment itself |
+| mtg | api | read and query a collection through an MTG API deployment |
+| mtg | add-cards | add cards to the collection |
+| mtg | remove-cards | remove cards from the collection |
+| mtg | build-deck | build a Commander deck from unassigned cards |
+| mtg | system | maintain the API deployment itself |
 | mtg | card-buyer | fill local game store and TCGPlayer carts from a card list |
 | mattshoe | session-defaults | start every session with permissions bypassed and Remote Control on, any OS |
 

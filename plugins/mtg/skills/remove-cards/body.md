@@ -2,7 +2,7 @@
 
 The collection lives behind the REST API at
 `$MTG_API_URL`. It is the single source of truth.
-See the **mtg-api** skill for the database shape and query rules.
+See the **api** skill for the database shape and query rules.
 
 Removing needs an admin token:
 
@@ -70,7 +70,7 @@ any doubt whose cards these are, ask.
 
 ## Notes
 
-- Input formats are exactly the same as adding; see **mtg-add-cards**.
+- Input formats are exactly the same as adding; see **add-cards**.
 - Basic lands and tokens are already gone from the collection entirely.
 - Before anything large, take a backup: `python3 $MTG_API_REPO/scripts/backup.py`.
   D1 Time Travel also covers the last 30 days.

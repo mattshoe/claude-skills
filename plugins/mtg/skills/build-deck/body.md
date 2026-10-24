@@ -10,7 +10,7 @@ unlimited; everything else must have a free copy. Never propose a card they do
 not own.
 
 The collection is the REST API at `$MTG_API_URL`.
-Read the **mtg-api** skill for the data shape and the query gotchas.
+Read the **api** skill for the data shape and the query gotchas.
 
 ## Where the pool comes from
 
@@ -333,7 +333,7 @@ One database, no shards, no schema prefixes — `cards`, `deck_cards`,
 `legalities`, `card_search` are all just tables. `GET /schema` lists every one
 with its columns and row counts.
 
-The gotchas that matter for a build, in full in the **mtg-api** skill:
+The gotchas that matter for a build, in full in the **api** skill:
 
 - **Filter on `owner`.** Without it a query sums every owner.
 - **Colour identity is stored alphabetically** — `'UW'`, never `'WU'`. Sort the

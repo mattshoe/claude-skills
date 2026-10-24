@@ -14,7 +14,7 @@ Fill the user's carts from a card list. Cart only. Never click checkout, never p
 
 ## Stores
 
-Config, in `~/.mtg-api.env` (see the mtg-api skill), loaded with `set -a; . ~/.mtg-api.env; set +a` before running any script:
+Config, in `~/.mtg-api.env` (see the api skill), loaded with `set -a; . ~/.mtg-api.env; set +a` before running any script:
 
 | Var | What |
 |---|---|

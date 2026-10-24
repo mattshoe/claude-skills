@@ -6,7 +6,7 @@ Usage: prep.py BOUGHT_FILE < typed.txt > want.txt
 Resolves each name with Scryfall fuzzy, then drops:
 - names Scryfall cannot resolve (report them, ask or guess)
 - digital-only cards (Alchemy etc, no paper copy)
-- cards free in the user's bulk (mtg-api card_usage.free > 0)
+- cards free in the user's bulk (the API's card_usage.free > 0)
 - cards already in BOUGHT_FILE (bought earlier this conversation)
 Cards he owns but that are all in decks are kept, they get bought.
 Report goes to stderr. Read-only.

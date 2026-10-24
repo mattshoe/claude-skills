@@ -157,14 +157,14 @@ logs is worse than no log.
 - **A cached 301 is keyed by URL**, so a redirect mistake survives a hard
   refresh. Add a query string to get past it.
 - `~/.mtg-api.env` holds the Cloudflare token, the admin password and the
-  config vars listed in the mtg-api skill. `chmod 600`, never committed.
+  config vars listed in the api skill. `chmod 600`, never committed.
 - The Drive folder's `deckpool.py` / `deckcheck.py` / `deckchart.py` read the
   frozen shards, so their pool is stale. Do not use them to decide what the user
   owns.
 
 ## Related skills
 
-**mtg-api** is how to use the API — read that first for the data shape and the
-query gotchas. `mtg-add-cards` / `mtg-remove-cards` edit the collection.
-`mtg-build-deck` builds a deck from unassigned cards. This skill is the
+**api** is how to use the API — read that first for the data shape and the
+query gotchas. `add-cards` / `remove-cards` edit the collection.
+`build-deck` builds a deck from unassigned cards. This skill is the
 machinery underneath them.

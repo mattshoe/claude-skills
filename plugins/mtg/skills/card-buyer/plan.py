@@ -32,6 +32,7 @@ if not STORES:
 STOREPASS = dict(p.strip().split("=", 1) for p in os.environ.get("CARD_STOREPASS", "").split(",") if "=" in p)
 CONDITIONS = ["Near Mint", "Lightly Played", "Moderately Played"]
 MAX_PAGES = 200
+PAGE_SIZE = 10  # BinderPOS search pages hold 10 products
 UA = {"User-Agent": "Mozilla/5.0", "Accept": "application/json, text/html;q=0.9, */*;q=0.8"}
 
 def open_url(req, opener=None):
@@ -89,6 +90,7 @@ def shopify_catalog(host, names):
                     x = variant(title, cond, vid, int(prices[vid]["price"]) / 100)
                     if avail.get(vid) == "1": x["in_stock"] = True
                     out[name].append(x)
+        if len(cards) < PAGE_SIZE: break  # a short page is the last one
     return out
 
 def storepass_catalog(host, names):

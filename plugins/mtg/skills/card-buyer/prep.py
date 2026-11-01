@@ -5,6 +5,7 @@ Usage: prep.py BOUGHT_FILE < typed.txt > want.txt
 
 Resolves the whole list with one Scryfall /cards/collection call per 75 names,
 fuzzy only for names that missed, then drops:
+- basic lands, never bought
 - names Scryfall cannot resolve (report them, ask or guess)
 - digital-only cards (Alchemy etc, no paper copy)
 - cards free in the user's bulk (the API's card_usage.free > 0)
@@ -15,6 +16,7 @@ Report goes to stderr. Read-only.
 import os, json, re, sys, time, urllib.request, urllib.parse, urllib.error
 
 UA = {"User-Agent": "mtg-card-buyer/1.0", "Accept": "application/json", "Content-Type": "application/json"}
+BASICS = {"plains", "island", "swamp", "mountain", "forest", "wastes"}
 API = os.environ["MTG_API_URL"].rstrip("/") + "/query"
 OWNER_ID = int(os.environ["MTG_OWNER_ID"])
 
@@ -70,10 +72,14 @@ def main():
     except FileNotFoundError:
         bought = set()
     lines = [l.strip() for l in sys.stdin if l.strip()]
-    parsed = []
+    parsed, basics = [], []
     for l in lines:
         m = re.match(r"^(\d+)x?\s+(.+)$", l)
-        parsed.append((int(m.group(1)), m.group(2)) if m else (1, l))
+        qty, typed = (int(m.group(1)), m.group(2)) if m else (1, l)
+        if re.sub(r"^snow-covered ", "", typed.strip().lower()) in BASICS:
+            basics.append(typed)
+        else:
+            parsed.append((qty, typed))
     found = resolve([t for _, t in parsed])
     resolved, unknown = [], []
     for qty, typed in parsed:
@@ -108,7 +114,7 @@ def main():
                 in_decks.append(n)
             out.append(f"{qty} {n}")
     print("\n".join(out))
-    for label, xs in [("UNKNOWN", unknown), ("DIGITAL-ONLY", digital), ("FREE IN BULK", free),
+    for label, xs in [("BASIC LAND (never bought)", basics), ("UNKNOWN", unknown), ("DIGITAL-ONLY", digital), ("FREE IN BULK", free),
                       ("BOUGHT THIS CONVERSATION", already), ("OWNED BUT ALL IN DECKS (buying)", in_decks)]:
         if xs:
             print(f"{label}: {', '.join(xs)}", file=sys.stderr)

@@ -32,6 +32,7 @@ Local stores are Shopify + BinderPOS. Product variants are conditions (`Near Min
 0. The user pastes typed names. Write them to `$SCRATCH/typed.txt` as given and run
    `python3 <skill base directory>/prep.py $SCRATCH/bought.txt < typed.txt > want.txt 2> prep.log`.
    It resolves names with Scryfall `/cards/collection`, fuzzy only for misses, and drops, reporting each on stderr:
+   - BASIC LAND, never bought, whatever the list says.
    - UNKNOWN, Scryfall could not resolve it. Guess the closest real card (`Fear of lost life` was Fear of Lost Teeth), add it to want.txt, and say so in the report.
    - DIGITAL-ONLY, Alchemy and other cards with no paper copy. TCGPlayer Mass Entry fails the whole list on one of these.
    - FREE IN BULK, `card_usage.free > 0` for owner_id $MTG_OWNER_ID. They pull these from bulk instead.
@@ -93,6 +94,7 @@ Tell the user in one line that the skill was updated.
 
 ## Change log
 
+- 2026-11-01: prep.py now drops basic lands. 37 Mountains went into carts, the user never buys basics.
 - 2026-11-01: plan.py still paged the store search 10 products at a time, 16 minutes and 3 pages of Dublin 429s on a 35-card list. Replaced it with one POST to `portal.binderpos.com/external/shopify/decklist?storeUrl=<Shopify.shop>&type=mtg`, body `[{card, quantity}]`, which returns every in-stock printing with variant id, condition, price and quantity. Dublin's Shopify.shop is evolve-cards-and-collectibles, not the hostname. prep.py now resolves through /cards/collection, and it wrongly dropped Plague Myr as digital-only because Scryfall returned an MTGO printing, it now checks `game:paper` in one search.
 - 2026-10-31: plan.py read every search page, 3 cards took 20+ minutes of Dublin 429s across pages of sold-out printings. BinderPOS lists in-stock products first, so paging now stops after the first page that holds a sold-out product. Dublin finished in 1 page. A price-ascending sort was tried and dropped, it mixes sold-out listings in.
 - 2026-10-16: A local line sent to TCGPlayer as cheaper (Ancient Copper Dragon, $140.75 local vs ~$125 market) came back from Mass Entry as a $143.56 foil, and Keep Current Printings kept it foil. After the optimizer, compare each card moved off a local store against its local price and move it back if TCGPlayer lost. Selecting the Direct cart by clicking its button with the computer tool worked. The optimizer's JS Optimize click did run, results just need a screenshot to read.

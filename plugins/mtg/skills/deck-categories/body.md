@@ -8,7 +8,7 @@ Read only. Never edit the deck. Read the **api** skill for the collection API, a
 python3 <skill base directory>/deck.py DECK_KEY > $SCRATCH/deck.tsv
 ```
 
-It prints the deck name to stderr. Lands and the commander are left out of everything below. The nonland count is the total the table must reach.
+It prints the deck name to stderr. The commander is left out. Lands get their own Lands category, which is only a count: check.py counts any card whose front face is a land, utility lands included. Lands are never allocated, reviewed or listed by name. The table totals 99.
 
 ## 2. Synergy categories
 
@@ -30,7 +30,7 @@ The categories are Ramp, Draw, Removal, Protection, then the synergy categories.
 - Protection is counterspells, shroud, hexproof, indestructible and anything that saves your pieces.
 
 1. **One agent allocates.** It gets deck.tsv, the final category list with definitions, and these rules:
-   - Every nonland, noncommander card goes in exactly one category.
+   - Every nonland, noncommander card goes in exactly one category. Leave lands out.
    - A card that fits several goes where it does the most work in this deck's plan. Write that judgment in the reason.
    - Output `alloc.tsv` with columns `name`, `category` and `reason`, using card names exactly as in deck.tsv.
 2. **Check it.**
@@ -45,8 +45,8 @@ In chat, show only the table from check.py, with no card names unless the user a
 Write the full document to `~/Documents/mtg/<deck name>/categories.md`. It holds:
 - The deck's intent, in a short paragraph.
 - Each synergy category with its definition.
-- The count table.
-- Every card under its category, with the reason.
+- The count table, including Lands.
+- Every nonland card under its category, with the reason. Lands appear only as a count.
 - Contested cards, with the other home each one could have.
 - A short log of each round: what was proposed, applied and rejected.
 
@@ -54,4 +54,4 @@ Overwrite any earlier categories.md for the same deck. Give the user the full pa
 
 ## Change log
 
-- 2026-11-01: Created.
+- 2026-11-01: Created. Lands are a counted category, never allocated.

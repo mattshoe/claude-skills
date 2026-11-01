@@ -4,14 +4,17 @@
 Usage: check.py deck.tsv alloc.tsv CATEGORY [CATEGORY ...]
 alloc.tsv: name<TAB>category<TAB>reason, one row per nonland, noncommander card.
 Fails if a card is missing, repeated, unknown, or in a category not listed.
-Lands (front face type has Land) and the commander are left out.
+Lands (front face type has Land) are counted into a Lands row, never allocated. The commander is left out.
 """
 import csv, sys
 
 deck_f, alloc_f, cats = sys.argv[1], sys.argv[2], sys.argv[3:]
-want = {}
+want, lands = {}, 0
 for r in csv.DictReader(open(deck_f), delimiter='\t'):
-    if r['role'] == 'commander' or 'Land' in r['type'].split(' // ')[0]:
+    if r['role'] == 'commander':
+        continue
+    if 'Land' in r['type'].split(' // ')[0]:
+        lands += int(r['qty'])
         continue
     want[r['name']] = int(r['qty'])
 
@@ -34,8 +37,9 @@ if errors:
     print('\n'.join(errors))
     sys.exit(1)
 
-total = sum(want.values())
+total = sum(want.values()) + lands
 print('| Category | Cards |\n|---|---|')
 for c in cats:
     print(f'| {c} | {sum(want[n] for n, k in got.items() if k == c)} |')
+print(f'| Lands | {lands} |')
 print(f'| Total | {total} |')

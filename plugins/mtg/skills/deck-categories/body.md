@@ -8,7 +8,7 @@ Read only. Never edit the deck. Read the **api** skill for the collection API, a
 python3 <skill base directory>/deck.py DECK_KEY > $SCRATCH/deck.tsv
 ```
 
-It prints the deck name to stderr. The commander is left out. Lands get their own Lands category, which is only a count: check.py counts any card whose front face is a land, utility lands included. Lands are never allocated, reviewed or listed by name. The table totals 99.
+It prints the deck name to stderr. The commander is left out. Lands get their own Lands category, which is only a count: check.py counts any card the deck files as a land or whose front face is a land, utility lands and spell // land cards included. Lands are never allocated, reviewed or listed by name. The table totals 99.
 
 ## 2. Synergy categories
 
@@ -54,4 +54,4 @@ Overwrite any earlier categories.md for the same deck. Give the user the full pa
 
 ## Change log
 
-- 2026-11-01: Created. Lands are a counted category, never allocated.
+- 2026-11-01: Created. Lands are a counted category, never allocated. A spell // land card the deck files as a land counts as a land, review agents flagged Sink into Stupor.

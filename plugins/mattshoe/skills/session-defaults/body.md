@@ -1,6 +1,6 @@
 # Session defaults
 
-Sets defaults so every new session starts in bypass mode, with Remote Control on, and with no workspace trust prompt:
+Sets defaults so every new session starts in bypass mode, with Remote Control on, with no workspace trust prompt, and with every plugin up to date:
 
 | Key | Value | Effect |
 |---|---|---|
@@ -14,6 +14,7 @@ Plus, for the "Accessing workspace ... Is this a project you created or one you 
 |---|---|
 | `projects["/"].hasTrustDialogAccepted = true` in `~/.claude.json` | no trust prompt in any folder outside a git repo, home included |
 | `claude` shell wrapper in the shell profile | trusts the current git repo right before claude starts, since git repos are trusted by repo root and a parent entry does not cover them |
+| same wrapper | before claude starts, updates any git-based plugin marketplace whose remote moved, then updates installed plugins whose version changed, so new skills show up in that session. Claude Code's own marketplace auto-update only applies on the next restart. About 0.7s when nothing changed |
 
 ## 1. Warn first
 
@@ -21,6 +22,7 @@ Before changing anything, tell the user in two lines and wait for a yes:
 - Bypass mode runs every tool without asking, including file deletes and shell commands. Deny rules still apply.
 - Remote Control lets any device signed in to their claude.ai account drive these sessions.
 - No trust prompt means a repo they just cloned runs its own project settings, hooks and MCP servers without asking.
+- Plugin updates install whatever the marketplace repos push, without asking.
 
 If they asked to turn the defaults **off**, skip the warning.
 
@@ -60,9 +62,9 @@ To turn the defaults **off**: remove `permissions.defaultMode` (or set `"default
 | bash | `~/.bashrc` | `<skill base directory>/trust-wrapper.sh` |
 | PowerShell | the path in `$PROFILE` (create it if missing) | `<skill base directory>/trust-wrapper.ps1` |
 
-Find the shell with `echo "$SHELL"`. On Windows use PowerShell's `$PROFILE`, Claude Code's Git Bash is not the user's interactive shell. Fish and cmd are not supported, say so. The POSIX wrapper needs `python3` and skips silently without it. The PowerShell wrapper is untested, after installing it ask the user to open a new PowerShell window in a git repo and run `claude` to confirm no prompt.
+Find the shell with `echo "$SHELL"`. On Windows use PowerShell's `$PROFILE`, Claude Code's Git Bash is not the user's interactive shell. Fish and cmd are not supported, say so. The POSIX wrapper needs `python3` and skips both steps silently without it. The PowerShell wrapper needs python3 or python for the plugin update step. The PowerShell wrapper is untested, after installing it ask the user to open a new PowerShell window in a git repo and run `claude` to confirm no prompt.
 
-To turn this **off**: remove `projects["/"]` (and the Windows drive root keys) from `.claude.json` and delete the marked block from the profile. Trust already given to individual repos stays.
+To turn this **off**: remove `projects["/"]` (and the Windows drive root keys) from `.claude.json` and delete the marked block from the profile, which also stops the plugin updates. Trust already given to individual repos stays.
 
 ## 5. Tell the user
 

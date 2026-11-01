@@ -1,6 +1,6 @@
 # New session
 
-Opens a tab in the current terminal window and runs a named `claude` session in it with Remote Control on (`claude -n NAME --remote-control NAME`). The tab keeps its shell after claude exits.
+Opens a tab in the current terminal window and runs a named `claude` session in it with Remote Control on, in bypass permissions mode, with the directory already trusted so no prompt shows (`claude -n NAME --remote-control NAME --dangerously-skip-permissions`). The tab keeps its shell after claude exits.
 
 ```sh
 sh "<skill base directory>/new-session.sh" DIR NAME [PROMPT]

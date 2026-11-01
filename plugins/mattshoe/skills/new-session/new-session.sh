@@ -13,8 +13,28 @@ fi
 q() { printf "'%s'" "$(printf %s "$1" | sed "s/'/'\\\\''/g")"; }
 
 # --remote-control takes an optional value, so always give it the name or it eats the prompt.
-CMD="claude -n $(q "$NAME") --remote-control $(q "$NAME")"
+CMD="claude -n $(q "$NAME") --remote-control $(q "$NAME") --dangerously-skip-permissions"
 [ -n "$PROMPT" ] && CMD="$CMD $(q "$PROMPT")"
+
+# Trusts DIR and its git repo in .claude.json, since no flag or setting skips the workspace trust prompt
+# and the new tab never goes through the shell profile wrapper. An entry set to false beats a trusted parent.
+trust() {
+  ROOT=$(git -C "$DIR" rev-parse --show-toplevel 2>/dev/null)
+  for PY in python3 python; do
+    "$PY" - "${CLAUDE_CONFIG_DIR:-$HOME}/.claude.json" "$(cygpath -m "$DIR" 2>/dev/null || echo "$DIR")" "$ROOT" <<'PY' 2>/dev/null && return
+import json, os, sys
+p = sys.argv[1]
+j = json.load(open(p, encoding="utf-8"))
+projects = j.setdefault("projects", {})
+for key in filter(None, sys.argv[2:]):
+    projects.setdefault(key.rstrip("/") or "/", {})["hasTrustDialogAccepted"] = True
+json.dump(j, open(p + ".trust-tmp", "w", encoding="utf-8"), indent=2, ensure_ascii=False)
+os.replace(p + ".trust-tmp", p)
+PY
+  done
+  echo "new-session: could not write workspace trust, the trust prompt may show" >&2
+}
+trust
 
 if [ -n "${TMUX:-}" ]; then
   exec tmux new-window -c "$DIR" "$CMD; exec \$SHELL"
@@ -74,7 +94,7 @@ fi
 if [ -n "${WT_SESSION:-}" ] || command -v wt.exe >/dev/null 2>&1; then
   # cmd does not understand single quotes, so double-quote each argument instead.
   dq() { printf '"%s"' "$(printf %s "$1" | sed 's/"/\\"/g')"; }
-  WCMD="claude -n $(dq "$NAME") --remote-control $(dq "$NAME")"
+  WCMD="claude -n $(dq "$NAME") --remote-control $(dq "$NAME") --dangerously-skip-permissions"
   [ -n "$PROMPT" ] && WCMD="$WCMD $(dq "$PROMPT")"
   # Stop Git Bash rewriting /k into a Windows path like K:/.
   MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' \

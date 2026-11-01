@@ -17,6 +17,10 @@ Then read the commander's oracle text word by word and write down exactly what t
 - "Exactly 1 damage" means a source dealing 2 doesn't count, and copies of the commander that deal 2 don't trigger each other.
 - A mandatory trigger can hit the user too. Painlands and Talismans then cost extra life. Say so once, and if they keep the card, drop it.
 
+## Category breakdown
+
+Run the **deck-categories** skill on the deck. It finds the synergy categories and allocates every card to Ramp, Draw, Removal, Protection, a synergy category or Lands. Show its count table with a Synergy total, which is the sum of the synergy categories. Use its categories and allocation in the rest of the analysis, for example to name which category a suggested card fills or which one a combo depends on. Skip it when the user asks a narrow question, like a single combo's odds.
+
 ## Hard rules
 
 These come from the user and are not up for debate. They apply to any card an analysis calls weak. Pass them to every subagent as hard rules.
@@ -110,4 +114,5 @@ Report where they agree and where they split. Drop any suggestion that breaks a 
 
 ## Change log
 
+- 2026-11-01: Added the deck-categories step.
 - 2026-11-01: Created from analysing one Izzet ping deck: engine read, loop hunt, combo odds, blind review, with deck.py and odds.py. odds.py matched 5 independent agents to 0.05 points. Cut to analysis and card suggestions, no swaps or buying.

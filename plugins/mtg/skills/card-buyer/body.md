@@ -92,6 +92,7 @@ Tell the user in one line that the skill was updated.
 
 ## Change log
 
+- 2026-10-31: plan.py read every search page, 3 cards took 20+ minutes of Dublin 429s across pages of sold-out printings. BinderPOS lists in-stock products first, so paging now stops after the first page that holds a sold-out product. Dublin finished in 1 page. A price-ascending sort was tried and dropped, it mixes sold-out listings in.
 - 2026-10-16: A local line sent to TCGPlayer as cheaper (Ancient Copper Dragon, $140.75 local vs ~$125 market) came back from Mass Entry as a $143.56 foil, and Keep Current Printings kept it foil. After the optimizer, compare each card moved off a local store against its local price and move it back if TCGPlayer lost. Selecting the Direct cart by clicking its button with the computer tool worked. The optimizer's JS Optimize click did run, results just need a screenshot to read.
 - 2026-10-16: StorePass reported stock -1 for some variants, plan.py picked them at qty -1 and bought the card twice elsewhere. Stock is now clamped at 0. Oversized box toppers (an 8ED Curiosity) are now skipped like art cards. On the optimizer, `document.getElementById('conditions-toggle').click()` did stick when the ref click did not.
 - 2026-10-16: Direct swap solved by the built-in Cart Optimizer, it offers a TCGplayer Direct cart. Replaced the manual per-card swap steps.

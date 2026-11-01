@@ -5,7 +5,8 @@ Usage: plan.py < want.txt        (one "QTY Card Name" per line)
 
 Aggregate lookups only, never one request per printing:
 - Shopify/BinderPOS stores: ONE search for every wanted card at once
-  (title:"A" OR title:"B" ...), paged to the end. Each search page already
+  (title:"A" OR title:"B" ...). The stores list in-stock products first, so
+  paging stops at the first page with a sold-out product. Each search page already
   carries every product's variant ids, conditions and prices, so no product
   pages are fetched. Sold-out variants are marked on the page too, stock is
   probed only when a card needs more than one copy.
@@ -63,7 +64,8 @@ def variant(title, cond, vid, price):
             "foil": bool(re.search(r"\bfoil\b", f"{title} {cond}".lower())), "price": price}
 
 def shopify_catalog(host, names):
-    """name -> variants, from one combined search paged to the end."""
+    """name -> variants, from one combined search. Sold-out products sort last,
+    so the first page holding one is the last page worth reading."""
     q = " OR ".join(f'title:"{front(n)}"' for n in names)
     want = {front(n).lower(): n for n in names}
     out = {n: [] for n in names}
@@ -73,7 +75,9 @@ def shopify_catalog(host, names):
         cards = re.split(r'<div class="product-card-list2 ', html)[1:]
         print(f"  {host} page {page}: {len(cards)} products", file=sys.stderr, flush=True)
         if not cards: break
+        sold_out_seen = False
         for c in cards:
+            if 'data-available="1"' not in c: sold_out_seen = True
             t = re.search(r'grid-view-item__title">([^<]+)<', c)
             if not t: continue
             title = htmllib.unescape(t.group(1)).strip()
@@ -91,6 +95,7 @@ def shopify_catalog(host, names):
                     if avail.get(vid) == "1": x["in_stock"] = True
                     out[name].append(x)
         if len(cards) < PAGE_SIZE: break  # a short page is the last one
+        if sold_out_seen: break  # in-stock products come first, the rest are sold out
     return out
 
 def storepass_catalog(host, names):

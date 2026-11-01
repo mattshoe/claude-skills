@@ -63,7 +63,15 @@ esac
 if [ -n "${KITTY_WINDOW_ID:-}" ]; then
   exec kitten @ launch --type=tab --cwd "$DIR" sh -c "$CMD; exec \${SHELL:-sh}"
 fi
-if [ -n "${WT_SESSION:-}" ]; then
+if [ -n "${GNOME_TERMINAL_SCREEN:-}" ]; then
+  exec gnome-terminal --tab --working-directory="$DIR" -- sh -c "$CMD; exec \${SHELL:-sh}"
+fi
+if [ -n "${KONSOLE_DBUS_SERVICE:-}" ]; then
+  exec konsole --new-tab --workdir "$DIR" -e sh -c "$CMD; exec \${SHELL:-sh}"
+fi
+
+# WT_SESSION is unset when a console launched from Explorer is handed to Windows Terminal, so also fall back to wt.exe.
+if [ -n "${WT_SESSION:-}" ] || command -v wt.exe >/dev/null 2>&1; then
   # cmd does not understand single quotes, so double-quote each argument instead.
   dq() { printf '"%s"' "$(printf %s "$1" | sed 's/"/\\"/g')"; }
   WCMD="claude -n $(dq "$NAME") --remote-control $(dq "$NAME")"
@@ -71,12 +79,6 @@ if [ -n "${WT_SESSION:-}" ]; then
   # Stop Git Bash rewriting /k into a Windows path like K:/.
   MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' \
     exec wt.exe -w 0 nt -d "$(cygpath -w "$DIR" 2>/dev/null || echo "$DIR")" cmd /k "$WCMD"
-fi
-if [ -n "${GNOME_TERMINAL_SCREEN:-}" ]; then
-  exec gnome-terminal --tab --working-directory="$DIR" -- sh -c "$CMD; exec \${SHELL:-sh}"
-fi
-if [ -n "${KONSOLE_DBUS_SERVICE:-}" ]; then
-  exec konsole --new-tab --workdir "$DIR" -e sh -c "$CMD; exec \${SHELL:-sh}"
 fi
 
 echo "new-session: unsupported terminal (TERM_PROGRAM=${TERM_PROGRAM:-unset}, TERM=${TERM:-unset})" >&2

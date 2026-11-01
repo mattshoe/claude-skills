@@ -3,7 +3,8 @@
 
 Usage: prep.py BOUGHT_FILE < typed.txt > want.txt
 
-Resolves each name with Scryfall fuzzy, then drops:
+Resolves the whole list with one Scryfall /cards/collection call per 75 names,
+fuzzy only for names that missed, then drops:
 - names Scryfall cannot resolve (report them, ask or guess)
 - digital-only cards (Alchemy etc, no paper copy)
 - cards free in the user's bulk (the API's card_usage.free > 0)
@@ -30,6 +31,29 @@ def get(url):
     return None
 
 
+def resolve(typed):
+    """lowercased name or front face -> card, one call per 75 names."""
+    found = {}
+    for i in range(0, len(typed), 75):
+        body = json.dumps({"identifiers": [{"name": t} for t in typed[i:i + 75]]}).encode()
+        req = urllib.request.Request("https://api.scryfall.com/cards/collection", data=body, headers=UA)
+        for c in json.load(urllib.request.urlopen(req))["data"]:
+            found[c["name"].lower()] = c
+            found[c["name"].split(" // ")[0].lower()] = c
+        time.sleep(0.15)
+    return found
+
+
+def paper_names(names):
+    """Which names have a paper printing. Scryfall hands back one printing per
+    name, and that one can be MTGO-only for a card with paper printings too."""
+    if not names:
+        return set()
+    q = "(" + " or ".join('!"%s"' % n for n in names) + ") game:paper"
+    d = get("https://api.scryfall.com/cards/search?q=" + urllib.parse.quote(q))
+    return {c["name"] for c in d["data"]} if d else set()
+
+
 def query(sql):
     body = json.dumps({"sql": sql, "fmt": "objects"}).encode()
     return json.load(urllib.request.urlopen(urllib.request.Request(API, data=body, headers=UA)))["rows"]
@@ -46,20 +70,26 @@ def main():
     except FileNotFoundError:
         bought = set()
     lines = [l.strip() for l in sys.stdin if l.strip()]
-    cards, unknown, digital = [], [], []
+    parsed = []
     for l in lines:
         m = re.match(r"^(\d+)x?\s+(.+)$", l)
-        qty, typed = (int(m.group(1)), m.group(2)) if m else (1, l)
-        d = get("https://api.scryfall.com/cards/named?fuzzy=" + urllib.parse.quote(typed))
-        time.sleep(0.15)
-        if not d:
+        parsed.append((int(m.group(1)), m.group(2)) if m else (1, l))
+    found = resolve([t for _, t in parsed])
+    resolved, unknown = [], []
+    for qty, typed in parsed:
+        d = found.get(typed.lower()) or get("https://api.scryfall.com/cards/named?fuzzy=" + urllib.parse.quote(typed))
+        if d:
+            resolved.append((qty, d))
+        else:
             unknown.append(typed)
-            continue
+    paper = paper_names([d["name"] for _, d in resolved if "paper" not in d.get("games", [])])
+    cards, digital = [], []
+    for qty, d in resolved:
         name = d["name"].split(" // ")[0] if d.get("layout") in ("transform", "modal_dfc", "adventure", "flip") else d["name"]
-        if "paper" not in d.get("games", []):
+        if "paper" in d.get("games", []) or d["name"] in paper:
+            cards.append((qty, name))
+        else:
             digital.append(name)
-            continue
-        cards.append((qty, name))
     usage = {}
     names = [n for _, n in cards]
     for i in range(0, len(names), 80):

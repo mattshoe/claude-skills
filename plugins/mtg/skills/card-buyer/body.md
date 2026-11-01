@@ -20,9 +20,10 @@ Config, in `~/.mtg-api.env` (see the api skill), loaded with `set -a; . ~/.mtg-a
 |---|---|
 | `CARD_STORES` | local store hosts in priority order, comma separated, e.g. `shop-a.example.com,shop-b.example.com` |
 | `CARD_STOREPASS` | optional, stores whose `/search` page is client-rendered by StorePass, `host=store_id,host=store_id` |
+| `CARD_SHOPIFY` | optional, each BinderPOS store's `Shopify.shop` id, `host=shop.myshopify.com,...`, read from the homepage when missing. Saves a request to a store that throttles us |
 | `MTG_API_URL`, `MTG_OWNER_ID` | the collection, for the bulk checks |
 
-If `CARD_STORES` is missing, stop and ask for the user's stores. Local stores are searched with Shopify `/search?q=` HTML, paged, or the StorePass API for hosts in `CARD_STOREPASS`. Leftovers go to TCGPlayer through the Mass Entry page in Chrome.
+If `CARD_STORES` is missing, stop and ask for the user's stores. Local stores are searched with one POST of the whole list to BinderPOS's decklist endpoint, or the StorePass API for hosts in `CARD_STOREPASS`. Never page through store search results. Leftovers go to TCGPlayer through the Mass Entry page in Chrome.
 
 Local stores are Shopify + BinderPOS. Product variants are conditions (`Near Mint`, `Lightly Played Foil`, ...). Product type `MTG Single`.
 
@@ -30,14 +31,14 @@ Local stores are Shopify + BinderPOS. Product variants are conditions (`Near Min
 
 0. The user pastes typed names. Write them to `$SCRATCH/typed.txt` as given and run
    `python3 <skill base directory>/prep.py $SCRATCH/bought.txt < typed.txt > want.txt 2> prep.log`.
-   It resolves names with Scryfall fuzzy and drops, reporting each on stderr:
+   It resolves names with Scryfall `/cards/collection`, fuzzy only for misses, and drops, reporting each on stderr:
    - UNKNOWN, Scryfall could not resolve it. Guess the closest real card (`Fear of lost life` was Fear of Lost Teeth), add it to want.txt, and say so in the report.
    - DIGITAL-ONLY, Alchemy and other cards with no paper copy. TCGPlayer Mass Entry fails the whole list on one of these.
    - FREE IN BULK, `card_usage.free > 0` for owner_id $MTG_OWNER_ID. They pull these from bulk instead.
    - BOUGHT THIS CONVERSATION, already in `$SCRATCH/bought.txt`.
    Cards they own but that are all in decks are kept and bought. Always filter `owner_id = 1`, never `owner = '$MTG_OWNER'`, some rows have a null owner.
 1. If UNKNOWN guesses were added, fix want.txt by hand.
-2. Run (optionally with `CARD_STORES=<host>,<host>` to change store order for one run) `python3 <skill base directory>/plan.py < want.txt > plan.json` (about 20s per card, run in background for long lists). It is read-only. It does the whole local chain: non-foil pass through every local store, then foil pass for what is left. Stock is probed in a throwaway cookie jar, never the user's cart. Output: per store `cart_items`, `lines`, `subtotal`, and `tcgplayer` (lines nobody local had).
+2. Run (optionally with `CARD_STORES=<host>,<host>` to change store order for one run) `python3 <skill base directory>/plan.py < want.txt > plan.json` (seconds, not minutes). It is read-only. It does the whole local chain: non-foil pass through every local store, then foil pass for what is left. Output: per store `cart_items`, `lines`, `subtotal`, and `tcgplayer` (lines nobody local had).
 3. Add to carts in Chrome (the user's real browser, so the cart is their). Load the claude-in-chrome skill first. For each store with non-empty `cart_items`:
    - Navigate a tab to `https://<host>/`.
    - Run in the page with javascript_tool, CART_ITEMS from plan.json:
@@ -92,6 +93,7 @@ Tell the user in one line that the skill was updated.
 
 ## Change log
 
+- 2026-11-01: plan.py still paged the store search 10 products at a time, 16 minutes and 3 pages of Dublin 429s on a 35-card list. Replaced it with one POST to `portal.binderpos.com/external/shopify/decklist?storeUrl=<Shopify.shop>&type=mtg`, body `[{card, quantity}]`, which returns every in-stock printing with variant id, condition, price and quantity. Dublin's Shopify.shop is evolve-cards-and-collectibles, not the hostname. prep.py now resolves through /cards/collection, and it wrongly dropped Plague Myr as digital-only because Scryfall returned an MTGO printing, it now checks `game:paper` in one search.
 - 2026-10-31: plan.py read every search page, 3 cards took 20+ minutes of Dublin 429s across pages of sold-out printings. BinderPOS lists in-stock products first, so paging now stops after the first page that holds a sold-out product. Dublin finished in 1 page. A price-ascending sort was tried and dropped, it mixes sold-out listings in.
 - 2026-10-16: A local line sent to TCGPlayer as cheaper (Ancient Copper Dragon, $140.75 local vs ~$125 market) came back from Mass Entry as a $143.56 foil, and Keep Current Printings kept it foil. After the optimizer, compare each card moved off a local store against its local price and move it back if TCGPlayer lost. Selecting the Direct cart by clicking its button with the computer tool worked. The optimizer's JS Optimize click did run, results just need a screenshot to read.
 - 2026-10-16: StorePass reported stock -1 for some variants, plan.py picked them at qty -1 and bought the card twice elsewhere. Stock is now clamped at 0. Oversized box toppers (an 8ED Curiosity) are now skipped like art cards. On the optimizer, `document.getElementById('conditions-toggle').click()` did stick when the ref click did not.

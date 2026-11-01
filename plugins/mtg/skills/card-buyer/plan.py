@@ -4,12 +4,11 @@
 Usage: plan.py < want.txt        (one "QTY Card Name" per line)
 
 Aggregate lookups only, never one request per printing:
-- Shopify/BinderPOS stores: ONE search for every wanted card at once
-  (title:"A" OR title:"B" ...). The stores list in-stock products first, so
-  paging stops at the first page with a sold-out product. Each search page already
-  carries every product's variant ids, conditions and prices, so no product
-  pages are fetched. Sold-out variants are marked on the page too, stock is
-  probed only when a card needs more than one copy.
+- Shopify/BinderPOS stores: ONE POST of the whole list to BinderPOS's decklist
+  endpoint on portal.binderpos.com. The reply carries every in-stock printing
+  with variant ids, conditions, prices and quantities. No paging, no search
+  pages, no stock probes. The store itself gets no requests when its
+  Shopify.shop id is in CARD_SHOPIFY, otherwise one homepage fetch to read it.
 - StorePass stores: its search has no OR, so one request per card, but each
   reply carries price and stock for every variant, so the store itself gets
   no requests at all.
@@ -20,9 +19,9 @@ what is still missing with foils in the same order. Within a store, cheapest
 qualifying copy first. Prints JSON: per store "cart_items" for /cart/add.js and
 the lines it covers, plus "tcgplayer" lines nobody local had.
 
-Read-only. Stock is probed in a throwaway cookie jar, never the user's cart.
+Read-only.
 """
-import html as htmllib, json, os, re, sys, time, urllib.request, urllib.parse, urllib.error, http.cookiejar
+import json, os, re, sys, time, urllib.request, urllib.parse, urllib.error
 
 # CARD_STORES="host1,host2" sets the local stores in priority order
 STORES = [h.strip() for h in os.environ.get("CARD_STORES", "").split(",") if h.strip()]
@@ -31,9 +30,10 @@ if not STORES:
 # Stores whose /search page is client-rendered by StorePass: host -> store_id
 # CARD_STOREPASS="host=store_id,host=store_id"
 STOREPASS = dict(p.strip().split("=", 1) for p in os.environ.get("CARD_STOREPASS", "").split(",") if "=" in p)
+# Shopify.shop ids, which do not always match the hostname: host -> shop
+# CARD_SHOPIFY="host=shop.myshopify.com,host=shop.myshopify.com"
+SHOPS = dict(p.strip().split("=", 1) for p in os.environ.get("CARD_SHOPIFY", "").split(",") if "=" in p)
 CONDITIONS = ["Near Mint", "Lightly Played", "Moderately Played"]
-MAX_PAGES = 200
-PAGE_SIZE = 10  # BinderPOS search pages hold 10 products
 UA = {"User-Agent": "Mozilla/5.0", "Accept": "application/json, text/html;q=0.9, */*;q=0.8"}
 
 def open_url(req, opener=None):
@@ -49,9 +49,6 @@ def open_url(req, opener=None):
 def get(url, opener=None):
     return open_url(urllib.request.Request(url, headers=UA), opener)
 
-def slug(s):
-    return re.sub(r"[^a-z0-9]+", "-", s.lower()).strip("-")
-
 def base_name(title):
     t = title.split(" [")[0].split(" - ")[0].split(" // ")[0]
     return re.sub(r"\s*\([^)]*\)", "", t).strip().lower()
@@ -63,39 +60,27 @@ def variant(title, cond, vid, price):
     return {"variant_id": int(vid), "title": title, "condition": cond,
             "foil": bool(re.search(r"\bfoil\b", f"{title} {cond}".lower())), "price": price}
 
-def shopify_catalog(host, names):
-    """name -> variants, from one combined search. Sold-out products sort last,
-    so the first page holding one is the last page worth reading."""
-    q = " OR ".join(f'title:"{front(n)}"' for n in names)
+def shopify_catalog(host, names, need):
+    """name -> in-stock variants, from one POST of the whole list to BinderPOS."""
+    shop = SHOPS.get(host)
+    if not shop:  # one homepage fetch, set CARD_SHOPIFY to skip it
+        m = re.search(r'Shopify\.shop\s*=\s*"([^"]+)"', get(f"https://{host}/"))
+        if not m: sys.exit(f"{host}: no Shopify.shop on the homepage")
+        shop = m.group(1)
+    body = json.dumps([{"card": front(n), "quantity": need[n]} for n in names]).encode()
+    url = f"https://portal.binderpos.com/external/shopify/decklist?storeUrl={shop}&type=mtg"
+    reply = json.loads(open_url(urllib.request.Request(url, data=body, headers={**UA, "Content-Type": "application/json"})))
+    print(f"  {host}: 1 request, {sum(r['found'] for r in reply)} copies across {len(reply)} cards", file=sys.stderr, flush=True)
     want = {front(n).lower(): n for n in names}
     out = {n: [] for n in names}
-    for page in range(1, MAX_PAGES + 1):
-        html = get(f"https://{host}/search?" + urllib.parse.urlencode(
-            {"q": q, "type": "product", "page": page}))
-        cards = re.split(r'<div class="product-card-list2 ', html)[1:]
-        print(f"  {host} page {page}: {len(cards)} products", file=sys.stderr, flush=True)
-        if not cards: break
-        sold_out_seen = False
-        for c in cards:
-            if 'data-available="1"' not in c: sold_out_seen = True
-            t = re.search(r'grid-view-item__title">([^<]+)<', c)
-            if not t: continue
-            title = htmllib.unescape(t.group(1)).strip()
+    for r in reply:
+        for p in r["products"] or []:
+            title = p["title"]
             name = want.get(base_name(title))
             if not name or re.search(r"art card|art series|oversized", title.lower()): continue
-            conds = {vid: htmllib.unescape(cond).strip() for vid, cond in
-                     re.findall(r'<option[^>]*value="(\d+)"[^>]*>([^<]+)<', c)}
-            pm = re.search(r"variants='(.*?)'>", c, re.S)
-            prices = json.loads(pm.group(1)) if pm else {}
-            # The quickview select marks each variant data-available="0|1"
-            avail = dict(re.findall(r'value="(\d+)" data-available="(\d)"', c))
-            for vid, cond in conds.items():
-                if cond.removesuffix(" Foil") in CONDITIONS and vid in prices and avail.get(vid) != "0":
-                    x = variant(title, cond, vid, int(prices[vid]["price"]) / 100)
-                    if avail.get(vid) == "1": x["in_stock"] = True
-                    out[name].append(x)
-        if len(cards) < PAGE_SIZE: break  # a short page is the last one
-        if sold_out_seen: break  # in-stock products come first, the rest are sold out
+            for v in p["variants"]:
+                if v["title"].removesuffix(" Foil") in CONDITIONS and v["quantity"] > 0:
+                    out[name].append({**variant(title, v["title"], v["shopifyId"], v["price"]), "stock": v["quantity"]})
     return out
 
 def storepass_catalog(host, names):
@@ -118,16 +103,6 @@ def storepass_catalog(host, names):
         out[n] = vs
     return out
 
-def probe_stock(host, variant_id):
-    op = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
-    body = json.dumps({"items": [{"id": variant_id, "quantity": 99}]}).encode()
-    req = urllib.request.Request(f"https://{host}/cart/add.js", data=body,
-                                 headers={**UA, "Content-Type": "application/json"})
-    try: open_url(req, op)
-    except urllib.error.HTTPError: pass  # 422 still adds what is in stock
-    cart = json.loads(get(f"https://{host}/cart.js", op))
-    return sum(i["quantity"] for i in cart["items"] if i["variant_id"] == variant_id)
-
 def market_floors(names):
     """front name (lower) -> cheapest Scryfall USD, one collection call per 75 names."""
     out, fronts = {}, [front(n) for n in names]
@@ -147,7 +122,7 @@ def main():
         if m and m.group(2): need[m.group(2)] = need.get(m.group(2), 0) + int(m.group(1) or 1)
     names = list(need)
     floors = market_floors(names)
-    catalogs = {h: (storepass_catalog if h in STOREPASS else shopify_catalog)(h, names) for h in STORES}
+    catalogs = {h: storepass_catalog(h, names) if h in STOREPASS else shopify_catalog(h, names, need) for h in STORES}
     lines = {h: [] for h in STORES}
     for foil in (False, True):
         for host in STORES:
@@ -158,11 +133,7 @@ def main():
                     if v["foil"] != foil: continue
                     # A local foil fallback must not cost far more than TCGPlayer would.
                     if foil and floor is not None and v["price"] > max(2 * floor, floor + 2): continue
-                    # Probe only when the page did not say, or more than one copy is needed
-                    if "stock" in v: have = v["stock"]
-                    elif v.get("in_stock") and need[name] == 1: have = 1
-                    else: have = probe_stock(host, v["variant_id"])
-                    n = min(need[name], have)
+                    n = min(need[name], v["stock"])
                     if n > 0:
                         lines[host].append({**v, "card": name, "qty": n}); need[name] -= n
     out = {"stores": [{"host": h,

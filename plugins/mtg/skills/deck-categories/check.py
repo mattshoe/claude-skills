@@ -4,7 +4,7 @@
 Usage: check.py deck.tsv alloc.tsv CATEGORY [CATEGORY ...]
 alloc.tsv: name<TAB>category<TAB>reason, one row per nonland, noncommander card.
 Fails if a card is missing, repeated, unknown, or in a category not listed.
-Lands (deck role 'land', or front face type has Land, so a spell // land card the deck files as a land counts) are counted into a Lands row, never allocated. The commander is left out.
+Lands are counted into a Lands row, never allocated. Double-faced cards never count as lands, whatever the deck files them as. The commander is left out.
 """
 import csv, sys
 
@@ -13,7 +13,7 @@ want, lands = {}, 0
 for r in csv.DictReader(open(deck_f), delimiter='\t'):
     if r['role'] == 'commander':
         continue
-    if r['role'] == 'land' or 'Land' in r['type'].split(' // ')[0]:
+    if ' // ' not in r['type'] and 'Land' in r['type']:
         lands += int(r['qty'])
         continue
     want[r['name']] = int(r['qty'])

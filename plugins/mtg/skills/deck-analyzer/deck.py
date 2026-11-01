@@ -7,7 +7,7 @@ One deck query, then Scryfall /cards/collection in batches of 75. Needs ~/.mtg-a
 """
 import json, os, sys, time, urllib.request
 
-UA = {'User-Agent': 'mtg-deck-tuner/1.0', 'Content-Type': 'application/json', 'Accept': 'application/json'}
+UA = {'User-Agent': 'mtg-deck-analyzer/1.0', 'Content-Type': 'application/json', 'Accept': 'application/json'}
 
 
 def post(url, body):

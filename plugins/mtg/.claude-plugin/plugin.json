@@ -1,7 +1,7 @@
 {
   "name": "mtg",
-  "description": "Magic: The Gathering skills: query and edit a collection through an MTG API deployment, build and tune Commander decks from it, maintain the API, and fill store carts from a card list.",
-  "version": "1.0.5",
+  "description": "Magic: The Gathering skills: query and edit a collection through an MTG API deployment, build and analyse Commander decks from it, maintain the API, and fill store carts from a card list.",
+  "version": "1.0.6",
   "author": {
     "name": "mattshoe"
   }

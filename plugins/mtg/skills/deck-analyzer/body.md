@@ -1,4 +1,6 @@
-# Tuning a deck
+# Analysing a deck
+
+Analysis only. Never edit the deck, write to the API or buy cards. Report findings and stop.
 
 Read the **api** skill for the collection API. Load config with `set -a; . ~/.mtg-api.env; set +a`.
 
@@ -17,41 +19,11 @@ Then read the commander's oracle text word by word and write down exactly what t
 
 ## Hard rules
 
-These come from the user and are not up for debate. Pass them to every subagent as hard rules.
+These come from the user and are not up for debate. They apply to any card an analysis calls weak. Pass them to every subagent as hard rules.
 - Never suggest cutting board wipes, lands, free mana rocks, card draw or protection unless the user asks. They pick their protection count on purpose.
 - Redundancy is deliberate. The user thinks in odds of drawing one of several, so "it overlaps with X" or "it's your 7th counterspell" is never a reason to cut.
-- Check the deck list before you suggest a card. Suggesting a card that's already in the deck is the worst miss.
-- Never claim no more cards exist for a role. Search first.
-- Respect the bracket. If the user says no more game changers, the Scryfall query gets `-is:gamechanger` and the `game_changer` column shows the current count.
-- Respect how the deck wins. If its creatures don't attack, don't suggest combat triggers. If it's an ETB deck, don't suggest instant or sorcery payoffs.
+- Respect the bracket and how the deck wins when judging cards.
 - Don't relitigate. When the user says a card stays, it stays.
-
-## Suggesting cards
-
-Search Scryfall, never pick from memory:
-
-```sh
-curl -s -G https://api.scryfall.com/cards/search -A mtg-deck-tuner/1.0 \
-  --data-urlencode 'q=id<=ur f:commander -is:gamechanger o:"draw a card" (o:"deals damage" or o:whenever)' \
-  --data-urlencode 'order=edhrec'
-```
-
-Use the commander's colours for `id<=`, and build oracle filters from the engine you wrote down. Drop every hit that's already in deck.tsv. The best picks are often synergy cards no generic list shows, like a card that draws on the exact event the commander creates.
-
-Check ownership of the shortlist with one query:
-`SELECT name, owned, in_decks, free FROM card_usage WHERE owner_id = $MTG_OWNER_ID AND name_norm IN (...)`.
-Bulk means `free > 0`, never cards claimed by a deck.
-
-Give each pick a one-line reason tied to this deck's engine. When the user asks for a cut, pick from cards that break none of the hard rules, and say what the cut card did.
-
-## Making swaps
-
-1. Fetch the list with `SELECT qty, name FROM deck_cards WHERE deck_id = ? AND role IS NOT 'commander'`.
-2. Swap names in Python and assert each outgoing name was found.
-3. Dry run POST `/decks/list` with `{key, commander, list, dry_run: true}` and a bearer token. Check the count is still 100 and read `acquired`. Those are cards to buy.
-4. Apply the change with `dry_run: false`. Re-run deck.py so later analysis uses the new list.
-
-If the user pastes a whole list, diff it against the current deck first and call out any card it silently drops.
 
 ## Finding combos and loops
 
@@ -115,10 +87,6 @@ When the user asks for a review, score or win rate, spawn 3 agents with the deck
 
 Report where they agree and where they split. Drop any suggestion that breaks a hard rule, and don't pass it on.
 
-## Buying
-
-Cards from a swap that the user doesn't own go to the **card-buyer** skill. Append them to that conversation's bought list once purchased.
-
 ## Change log
 
-- 2026-11-01: Created from tuning one Izzet ping deck. It covers the suggestion, swap, loop hunt, odds and review flows, plus deck.py and odds.py. odds.py matched 5 independent agents to 0.05 points.
+- 2026-11-01: Created from analysing one Izzet ping deck: engine read, loop hunt, combo odds, blind review, with deck.py and odds.py. odds.py matched 5 independent agents to 0.05 points. Cut to analysis only, no suggestions, swaps or buying.

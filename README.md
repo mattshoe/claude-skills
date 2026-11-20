@@ -17,6 +17,7 @@ Claude Code skills for a Magic: The Gathering collection, packaged as a plugin m
 | mtg | deck-analyzer | analyse a built deck: card suggestions, combo hunting, combo odds, blind reviews |
 | mtg | deck-architecture | the categories, baseline counts and multi-role rule behind every deck judgment |
 | mtg | deck-categories | split a deck into synergy categories, allocate every nonland card to a primary role plus its other roles, count lands |
+| mtg | deck-synergy | graph a deck's synergy from makes and uses tags, simulate draws, score it out of 100 |
 | mtg | card-buyer | fill local game store and TCGPlayer carts from a card list |
 | mattshoe | session-defaults | start every session with permissions bypassed, Remote Control on and no workspace trust prompt, any OS |
 | mattshoe | new-session | open a new tab in the current terminal and start claude there |

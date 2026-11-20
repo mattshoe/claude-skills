@@ -86,7 +86,8 @@ exactly what it would do, and writes nothing. Show the user that before applying
 | `POST /decks/list` | `{slug, commander, list}` — replaces a deck's list wholesale |
 | `POST /decks/disassemble` | `{slug}` — deletes the deck, its cards go back to bulk |
 | `GET /decks/formats` | the formats a deck can be |
-| `POST /query` | a write statement also works here, and is also gated |
+| `POST /query` | read-only for everybody, admin included: only SELECT, WITH, VALUES and EXPLAIN run |
+| `GET`/`POST /fetch-lists` | an account's saved Fetch lists, the whole set; the admin token names the account with `?user=<id>` to read and `"user": <id>` to write |
 | `GET|POST /maintenance` | the daily job; `{"only":"orphans","wait":true}` |
 | `GET /logs`, `GET /logs/stats` | the request log — admin, because it holds IPs |
 

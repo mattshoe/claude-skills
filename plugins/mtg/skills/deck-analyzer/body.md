@@ -2,6 +2,8 @@
 
 Analysis and card suggestions only. Never edit the deck, write to the API or buy cards.
 
+Load the **deck-architecture** skill before judging anything. It holds the categories, the baseline counts and the multi-role rule every judgment here rests on. Every subagent brief that judges cards, the combo hunt, the math check and the fresh-eyes review, includes the path `${XDG_CACHE_HOME:-$HOME/.cache}/claude-skills/deck-architecture/body.md` and tells the agent to read it first, since subagents don't load skills on their own.
+
 Read the **api** skill for the collection API. Load config with `set -a; . ~/.mtg-api.env; set +a`.
 
 ## Start every time
@@ -19,7 +21,7 @@ Then read the commander's oracle text word by word and write down exactly what t
 
 ## Category breakdown
 
-Run the **deck-categories** skill on the deck. It finds the synergy categories and allocates every card to Ramp, Draw, Removal, Protection, a synergy category or Lands. Show its count table with a Synergy total, which is the sum of the synergy categories. Use its categories and allocation in the rest of the analysis, for example to name which category a suggested card fills or which one a combo depends on. Skip it when the user asks a narrow question, like a single combo's odds.
+Run the **deck-categories** skill on the deck. It finds the synergy categories and allocates every card to Ramp, Draw, Removal, Protection, a synergy category or Lands. Show its count table with a Synergy total, which is the sum of the synergy categories, against the deck-architecture baseline, plus its multi-role count. Use its categories and allocation in the rest of the analysis, for example to name which category a suggested card fills or which one a combo depends on. Skip it when the user asks a narrow question, like a single combo's odds.
 
 ## Hard rules
 
@@ -48,12 +50,13 @@ Check ownership of the shortlist with one query:
 `SELECT name, owned, in_decks, free FROM card_usage WHERE owner_id = $MTG_OWNER_ID AND name_norm IN (...)`.
 Bulk means `free > 0`, never cards claimed by a deck.
 
-Give each pick a one-line reason tied to this deck's engine. When the user asks what to cut, pick from cards that break none of the hard rules, and say what the cut card did.
+Give each pick a one-line reason tied to this deck's engine, and name every category it fills. Prefer picks that fill 2 or more. When the user asks what to cut, pick from cards that break none of the hard rules, start with single-role cards that are only average at their one job, and say what the cut card did.
 
 ## Finding combos and loops
 
 Spawn 5 subagents in parallel. Write one brief file and point each agent at it. The brief holds:
 - the path to deck.tsv
+- the deck-architecture body path, to read first
 - the commander engine you wrote down
 - the loops already known, marked "do not report"
 - the rules traps below
@@ -103,8 +106,8 @@ When the user wants the math checked, spawn 3 to 5 subagents. Give them the comb
 
 ## Fresh-eyes review
 
-When the user asks for a review, score or win rate, spawn 3 agents with the deck.tsv path and the hard rules, and nothing else. Give them no conclusions of yours, so they aren't anchored. Ask each for:
-- Synergy gaps.
+When the user asks for a review, score or win rate, spawn 3 agents with the deck.tsv path, the deck-architecture body path and the hard rules, and nothing else. Give them no conclusions of yours, so they aren't anchored. Ask each for:
+- Synergy gaps, and category counts against the deck-architecture baseline.
 - The weakest 5 cards, which must not include protected categories.
 - A 0 to 100 score.
 - A win rate at the deck's bracket in a 4 player pod.
@@ -113,6 +116,8 @@ When the user asks for a review, score or win rate, spawn 3 agents with the deck
 Report where they agree and where they split. Drop any suggestion that breaks a hard rule, and don't pass it on.
 
 ## Change log
+
+- 2026-11-20: Loads deck-architecture first and passes it to every judging subagent. Suggestions and cuts weigh how many categories a card fills.
 
 - 2026-11-01: Added the deck-categories step.
 - 2026-11-01: Created from analysing one Izzet ping deck: engine read, loop hunt, combo odds, blind review, with deck.py and odds.py. odds.py matched 5 independent agents to 0.05 points. Cut to analysis and card suggestions, no swaps or buying.

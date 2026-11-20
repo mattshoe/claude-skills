@@ -1,6 +1,6 @@
 # Deck categories
 
-Read only. Never edit the deck. Read the **api** skill for the collection API, and load config with `set -a; . ~/.mtg-api.env; set +a`.
+Read only. Never edit the deck. Load the **deck-architecture** skill first, it holds the categories, the baseline counts and the multi-role rule this skill measures against. Every agent brief below includes the path `${XDG_CACHE_HOME:-$HOME/.cache}/claude-skills/deck-architecture/body.md` and tells the agent to read it first. Read the **api** skill for the collection API, and load config with `set -a; . ~/.mtg-api.env; set +a`.
 
 ## 1. Load the deck
 
@@ -30,28 +30,32 @@ The categories are Ramp, Draw, Removal, Protection, then the synergy categories.
 - Protection is counterspells, shroud, hexproof, indestructible and anything that saves your pieces.
 
 1. **One agent allocates.** It gets deck.tsv, the final category list with definitions, and these rules:
-   - Every nonland, noncommander card goes in exactly one category. Leave lands out.
+   - Every nonland, noncommander card gets exactly one primary category. Leave lands out.
    - A card that fits several goes where it does the most work in this deck's plan. Write that judgment in the reason.
-   - Output `alloc.tsv` with columns `name`, `category` and `reason`, using card names exactly as in deck.tsv.
+   - List every other category the card really fills in this deck in `also`, comma-separated, blank if none. Only roles it does in this deck, not ones it could do in theory.
+   - Output `alloc.tsv` with columns `name`, `category`, `reason` and `also`, using card names exactly as in deck.tsv.
 2. **Check it.**
    `python3 <skill base directory>/check.py $SCRATCH/deck.tsv $SCRATCH/alloc.tsv Ramp Draw Removal Protection "<synergy 1>" ...`
-   It fails on any missing, repeated or unknown card or category. Send failures back to the allocating agent until it passes.
-3. **Review loop.** Each round, spawn 3 agents with deck.tsv, the categories and alloc.tsv. Each returns either "no meaningful change" or a list of moves, written as card, from, to and why. A meaningful move fixes a card in the wrong role. A coin-flip between two fair homes doesn't count. Apply moves that 2 of 3 agents back, or that are clearly right on the oracle text. Run check.py after each round. Repeat until a round applies no moves, and stop after 5 rounds with the open disputes listed.
+   It fails on any missing, repeated or unknown card or category, or an `also` that repeats the primary. It prints the count table and the multi-role count. Send failures back to the allocating agent until it passes.
+3. **Review loop.** Each round, spawn 3 agents with deck.tsv, the categories and alloc.tsv. Each returns either "no meaningful change" or a list of moves, written as card, from, to and why. A move can change a primary or add or drop an `also` role. A meaningful move fixes a card in the wrong role. A coin-flip between two fair homes doesn't count. Apply moves that 2 of 3 agents back, or that are clearly right on the oracle text. Run check.py after each round. Repeat until a round applies no moves, and stop after 5 rounds with the open disputes listed.
 
 ## 4. Output
 
-In chat, show only the table from check.py, with no card names unless the user asks.
+In chat, show the table from check.py with a Baseline column from deck-architecture and the multi-role count, with no card names unless the user asks. Synergy's baseline sits on the total of the synergy categories.
 
 Write the full document to `~/Documents/mtg/<deck name>/categories.md`. It holds:
 - The deck's intent, in a short paragraph.
 - Each synergy category with its definition.
-- The count table, including Lands.
-- Every nonland card under its category, with the reason. Lands appear only as a count.
+- The count table, including Lands, against the deck-architecture baseline. Say whether the deck's plan explains each gap.
+- The multi-role share, and the single-role cards, since each one has to do its one thing really well.
+- Every nonland card under its primary category, with its other roles and the reason. Lands appear only as a count.
 - Contested cards, with the other home each one could have.
 - A short log of each round: what was proposed, applied and rejected.
 
 Overwrite any earlier categories.md for the same deck. Give the user the full path.
 
 ## Change log
+
+- 2026-11-20: Loads deck-architecture first. Cards keep one primary category and list their other roles in `also`, check.py prints the multi-role count.
 
 - 2026-11-01: Created. Lands are a counted category, never allocated. Double-faced cards never count as lands, the user's rule.

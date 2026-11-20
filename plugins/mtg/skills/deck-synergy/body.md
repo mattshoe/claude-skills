@@ -56,7 +56,7 @@ Spawn one agent with deck.tsv, the deck-architecture path, the categories and th
 - `cards` is for card draw sources, same format as `mana`. Rhystic Study or Phyrexian Arena is `1 next`, Sylvan Library `1 now`, Brainstorm `2 once`, Night's Whisper `2 once`. Count only reliable extra cards, not conditional ones you can't count on.
 - `fire` is extra mana a card needs before its links work, on top of casting it. Najeela is `5` for WUBRG, a sac outlet with a {1} cost is `1`. Blank means 0.
 - The commander gets makes and uses like any card. The simulation puts it in play once there's mana for it, so a cheap commander's links count almost every draw and a 10-drop's rarely do. Tag a flip commander by both faces.
-- Give every makes and uses tag a strength of 1 or 2, like `dinosaur:2`, by answering three yes or no questions about the link. Does it fire every time, not only sometimes? Does its output grow with the board, not stay fixed? Is it on the deck's main chain, not a side bonus? Two or more yeses is 2, otherwise 1. Write the answers in the reason as `yyn` and the like for any card whose strength isn't obvious. A link counts the weaker of its two sides, so a 1-toughness Dinosaur is `dinosaur:1` even though Pantlaza uses `dinosaur:2`. There's no 3. Combos that win on their own come from Spellbook, and graph.py rejects a 3. When the answers depend on stats, like toughness for Pantlaza, set the cut-offs once from the pt column, write them in the first reason, and apply them to every card. graph.py fails on a tag without a strength.
+- Give every makes and uses tag a strength of 1 or 2, like `dinosaur:2`, using this test on the pair. **2**, a real link that does work in the deck's plan, like Pantlaza with a mid-sized Dinosaur. **1**, incidental, like an anthem or a minor bonus. A link counts the weaker of its two sides, so a 1-toughness Dinosaur is `dinosaur:1` even though Pantlaza uses `dinosaur:2`. There's no 3. Combos that win on their own come from Spellbook, and graph.py rejects a 3. When a strength depends on stats, like toughness for Pantlaza, set the cut-offs once from the pt column, write them in the first reason, and apply them to every card. graph.py fails on a tag without a strength.
 - Don't tag the same link twice. If every Dinosaur entering is the whole point, `dinosaur` covers it, so don't add `etb` at the same strength. Two cards feeding each other both ways is a loop, not a duplicate, so tag both directions.
 - Every tag made must be used by something in the deck and the other way round. A tag with only one side is either a mistake or an effect the engine doesn't care about, so drop it.
 - Use card names exactly as in deck.tsv.
@@ -71,7 +71,7 @@ python3 <skill base directory>/graph.py $SCRATCH/deck.tsv $SCRATCH/tags.tsv "<sy
 
 It fails on a missing, repeated or unknown card or category, or a tag without a strength. Send failures back to the tagging agent until it passes.
 
-**Review loop.** Each round, spawn 3 agents with deck.tsv, the deck-architecture path, the categories and tags.tsv. Each looks for tags that link cards that don't really work together, missing tags on cards that do, strengths whose yes or no answers are wrong, Elite on cards that aren't, tutors with wrong or missing finds, and wrong categories. Rules details count here, like "another creature", exact damage amounts or who controls the source. Each returns "no meaningful change" or a list of fixes, card, change and why. Apply fixes 2 of 3 back, or that are clearly right on the oracle text. Rerun graph.py. Stop when a round applies nothing, or after 3 rounds with the disputes listed.
+**Review loop.** Each round, spawn 3 agents with deck.tsv, the deck-architecture path, the categories and tags.tsv. Each looks for tags that link cards that don't really work together, missing tags on cards that do, strengths set too high or too low, Elite on cards that aren't, tutors with wrong or missing finds, and wrong categories. Rules details count here, like "another creature", exact damage amounts or who controls the source. Each returns "no meaningful change" or a list of fixes, card, change and why. Apply fixes 2 of 3 back, or that are clearly right on the oracle text. Rerun graph.py. Stop when a round applies nothing, or after 3 rounds with the disputes listed.
 
 ## 4. Score
 
@@ -95,7 +95,7 @@ Write the full report to `~/Documents/mtg/<deck name>/synergy.md`, with the deck
 
 ## Change log
 
-- 2026-11-20: Strong links come from Commander Spellbook combos, not tags. Taggers pick 1 or 2 with three yes or no questions, to cut tagger variance.
+- 2026-11-20: Strong links come from Commander Spellbook combos, not tags, so taggers only pick 1 or 2. A yes or no rubric for 1 versus 2 was tried and dropped, two taggers on the same deck still split on strengths.
 - 2026-11-20: 20 reference decks across all 5 brackets from Archidekt. Score is a fitted line, correlation 0.74. Chains of three count when the middle card changes role, tutors chain and commanders with finds tutor.
 - 2026-11-20: Online needs a strong pair or a fully linked triple, so hubs with loose spokes don't count.
 - 2026-11-20: Engine power replaces pairs, so triples and redundancy count. Strength has a test, 3 means the pair alone pushes toward winning. New `cards` and `fire` columns for card draw and activation costs. One-shot mana is spent once.

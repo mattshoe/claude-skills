@@ -12,16 +12,29 @@ Read the **api** skill for the collection API. Load config with `set -a; . ~/.mt
 python3 <skill base directory>/deck.py DECK_KEY > $SCRATCH/deck.tsv
 ```
 
-It writes qty, name, role, cost, type, game_changer and oracle text for every card, from one deck query and batched Scryfall calls. Read it before saying anything about the deck. Brief subagents with this file, not with your own summary of the deck.
+It writes qty, name, role, cost, mv, type, game_changer and oracle text for every card, from one deck query and batched Scryfall calls. Read it before saying anything about the deck. Brief subagents with this file, not with your own summary of the deck.
 
 Then read the commander's oracle text word by word and write down exactly what triggers it. The engine is where the deck's real rules are. Things that went wrong on one deck:
 - "Another source you control" leaves out sources an opponent controls, like an emblem they own.
 - "Exactly 1 damage" means a source dealing 2 doesn't count, and copies of the commander that deal 2 don't trigger each other.
 - A mandatory trigger can hit the user too. Painlands and Talismans then cost extra life. Say so once, and if they keep the card, drop it.
 
+## Known combos and mana
+
+Two scripts run on deck.tsv, each one call or no calls at all:
+
+```sh
+python3 <skill base directory>/spellbook.py $SCRATCH/deck.tsv > $SCRATCH/combos.tsv
+python3 <skill base directory>/mana.py $SCRATCH/deck.tsv
+```
+
+spellbook.py lists every combo Commander Spellbook knows in the deck, from one call for the whole list. mana.py plays 10,000 games of lands and ramp and prints the average mana on turns 1 to 6, and how often the deck is ahead of curve. It reads ramp from oracle text and lists every source it found, so check that list before trusting the numbers. Use the mana table when judging ramp, curve or whether the deck can cast its payoffs on time.
+
 ## Category breakdown
 
 Run the **deck-categories** skill on the deck. It finds the synergy categories and allocates every card to Ramp, Draw, Removal, Protection, a synergy category or Lands. Show its count table with a Synergy total, which is the sum of the synergy categories, against the deck-architecture baseline, plus its multi-role count. Use its categories and allocation in the rest of the analysis, for example to name which category a suggested card fills or which one a combo depends on. Skip it when the user asks a narrow question, like a single combo's odds.
+
+Then find the orphans, cards in a synergy category that work with nothing else in the deck. Spawn one agent with deck.tsv, the deck-architecture path and the allocation. For each synergy-category card it names the other cards in the deck it actually works with, by oracle text and the deck's real plan, and lists the ones with none. Orphans are the first cut candidates, subject to the hard rules.
 
 ## Hard rules
 
@@ -58,7 +71,7 @@ Spawn 5 subagents in parallel. Write one brief file and point each agent at it. 
 - the path to deck.tsv
 - the deck-architecture body path, to read first
 - the commander engine you wrote down
-- the loops already known, marked "do not report"
+- the loops already known, marked "do not report", including every combo in combos.tsv
 - the rules traps below
 
 Give each agent a different starting angle:
@@ -119,5 +132,6 @@ Report where they agree and where they split. Drop any suggestion that breaks a 
 
 - 2026-11-20: Loads deck-architecture first and passes it to every judging subagent. Suggestions and cuts weigh how many categories a card fills.
 
+- 2026-11-20: Added spellbook.py for known combos, mana.py for mana by turn, and the orphan check. They came from the deleted deck-synergy skill, whose score measured how fast linked cards showed up, not deck strength.
 - 2026-11-01: Added the deck-categories step.
 - 2026-11-01: Created from analysing one Izzet ping deck: engine read, loop hunt, combo odds, blind review, with deck.py and odds.py. odds.py matched 5 independent agents to 0.05 points. Cut to analysis and card suggestions, no swaps or buying.

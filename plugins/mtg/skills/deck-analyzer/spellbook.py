@@ -12,7 +12,7 @@ names = {r['name'].split(' // ')[0].lower(): r['name'] for r in rows}
 body = {'main': [{'card': r['name'].split(' // ')[0], 'quantity': int(r['qty'])} for r in rows if r['role'] != 'commander'],
         'commanders': [{'card': r['name'].split(' // ')[0], 'quantity': 1} for r in rows if r['role'] == 'commander']}
 req = urllib.request.Request('https://backend.commanderspellbook.com/find-my-combos', json.dumps(body).encode(),
-                             {'Content-Type': 'application/json', 'User-Agent': 'mtg-deck-synergy/1.0'})
+                             {'Content-Type': 'application/json', 'User-Agent': 'mtg-deck-analyzer/1.0'})
 res = json.load(urllib.request.urlopen(req, timeout=120))['results']
 print('cards\tproduces')
 seen = set()

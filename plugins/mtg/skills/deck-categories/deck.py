@@ -16,10 +16,10 @@ def post(url, body):
 
 
 arg = sys.argv[1]
-where, param = ('d.id = ?', int(arg)) if arg.isdigit() else ('d.key = ?', arg)
+where, param = ('(d.key = ? OR CAST(d.id AS TEXT) = ?)', arg)  # keys can be all digits, so try the key first
 res = post(os.environ['MTG_API_URL'] + '/query', {
     'sql': f'SELECT d.name AS deck, dc.qty, dc.name, dc.role FROM deck_cards dc JOIN decks d ON d.id = dc.deck_id WHERE {where} ORDER BY dc.role, dc.name',
-    'params': [param], 'fmt': 'objects'})
+    'params': [param, param] if 'OR' in where else [param], 'fmt': 'objects'})
 rows = res['rows'] if isinstance(res, dict) and 'rows' in res else res
 if isinstance(res, dict) and 'error' in res:
     sys.exit(res['error'])

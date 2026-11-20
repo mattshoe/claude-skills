@@ -32,7 +32,7 @@ spellbook.py lists every combo Commander Spellbook knows in the deck, from one c
 
 ## Category breakdown
 
-Run the **deck-categories** skill on the deck. It finds the synergy categories and allocates every card to Ramp, Draw, Removal, Protection, a synergy category or Lands. Show its count table with a Synergy total, which is the sum of the synergy categories, against the deck-architecture baseline, plus its multi-role count. Use its categories and allocation in the rest of the analysis, for example to name which category a suggested card fills or which one a combo depends on. Skip it when the user asks a narrow question, like a single combo's odds.
+Run the **deck-categories** skill on the deck. It finds the synergy categories and allocates every card to Ramp, Draw, Removal, Protection, Multipliers, a synergy category or Lands. Show its count table with a Synergy total, which is the sum of the synergy categories, against the deck-architecture baseline, plus its multi-role count. Use its categories and allocation in the rest of the analysis, for example to name which category a suggested card fills or which one a combo depends on. Skip it when the user asks a narrow question, like a single combo's odds.
 
 Then find the orphans, cards in a synergy category that work with nothing else in the deck. Spawn one agent with deck.tsv, the deck-architecture path and the allocation. For each synergy-category card it names the other cards in the deck it actually works with, by oracle text and the deck's real plan, and lists the ones with none. Orphans are the first cut candidates, subject to the hard rules.
 

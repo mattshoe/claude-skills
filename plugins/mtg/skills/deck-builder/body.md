@@ -15,14 +15,14 @@ The user names the commander. Then ask, in one message, and wait:
 Read the commander's oracle text word by word and write down:
 - **The engine.** What it makes, what it uses, what it rewards.
 - **The win.** How this deck actually ends a game. It can be combat, voltron, drain, combo, alternate win or something else. Name it plainly, it's the thing every later choice serves.
-- **Synergy categories.** The steps of the engine, usually an enabler, a converter or multiplier, and a payoff. Aristocrats is fodder, sac outlets, payoffs. Voltron is evasion, protection and pump for the commander. 2 to 5 categories, each with a one-line definition.
-- **Counts.** Start from the deck-architecture baseline, 37 lands, 10 ramp, 10 draw, 8 removal, 8 protection, 26 synergy. Move a count only with a reason tied to this deck. Landfall wants more lands, a voltron deck wants more protection, a deck that tutors constantly can run less draw. Write each move and its reason. The total is 99.
+- **Synergy categories.** The steps of the engine, usually an enabler, a converter, and a payoff. Aristocrats is fodder, sac outlets, payoffs. Voltron is evasion, protection and pump for the commander. 2 to 5 categories, each with a one-line definition.
+- **Counts.** Start from the deck-architecture baseline, 37 lands, 10 ramp, 10 draw, 8 removal, 8 protection, 6 multipliers, 20 synergy. Move a count only with a reason tied to this deck. Landfall wants more lands, a deck with nothing worth doubling wants fewer multipliers, a voltron deck wants more protection, a deck that tutors constantly can run less draw. Write each move and its reason. The total is 99.
 
 Show the plan to the user in a few lines and keep going unless they object.
 
 ## 3. Pick the spells
 
-Go category by category: each synergy category first, then ramp, draw, removal, protection. Keep one running list.
+Go category by category: each synergy category first, then multipliers, ramp, draw, removal, protection. Keep one running list.
 
 **Where candidates come from.**
 - Collection scope: free copies only, from one query per category, filtered to the commander's colour identity. Bulk means `free > 0`, never cards claimed by a deck.
@@ -87,4 +87,5 @@ In chat: the name, the plan in two lines, the counts table, what has to be bough
 
 ## Change log
 
+- 2026-11-20: Multipliers are a category, 6 by default.
 - 2026-11-20: Created. Karsten's method checked against his published 99-card figures. Fetch lists go through `/fetch-lists` with the admin token, added to the API for this.

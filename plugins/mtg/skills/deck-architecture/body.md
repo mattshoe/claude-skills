@@ -15,12 +15,13 @@ Decks are built around concepts, never around single cards. Every judgment about
 
 ## Categories
 
-Every deck breaks down into six categories.
+Every deck breaks down into seven categories.
 - **Land.** Single-faced lands, utility lands included.
 - **Ramp.** Mana rocks, dorks, cost reducers, land untappers and extra land drops.
 - **Draw.** Card draw and card advantage.
 - **Removal.** Usually targeted. Ideally it hits any permanent type for flexibility, but that's a preference, not a requirement. Burn, destroy, exile, bounce and wipes all count.
 - **Protection.** Counterspells, hexproof, shroud, indestructible and anything else that saves your pieces.
+- **Multipliers.** Cards that double or copy what the deck's engine produces, like Doubling Season, Parallel Lives, Panharmonicon, Strionic Resonator, Teysa Karlov or copy effects. They make every other engine piece count twice, so a deck with nothing worth multiplying runs fewer.
 - **Synergy.** A bucket that is always broken into its own categories, the pieces of the deck's engine or win con. An aristocrats deck has fodder, sac outlets and payoffs. A go-wide deck has token makers and pumpers.
 
 ## Baseline
@@ -34,7 +35,8 @@ The starting point for every deck:
 | Draw | 10 |
 | Removal | 8 |
 | Protection | 8 |
-| Synergy | 26 |
+| Multipliers | 6 |
+| Synergy | 20 |
 | Total | 99 |
 
 ## Tweaks
@@ -58,5 +60,6 @@ A card that fills only one category has to earn it by doing its one thing really
 
 ## Change log
 
+- 2026-11-20: Added Multipliers at 6, out of Synergy, which drops to 20.
 - 2026-11-20: Added Probabilities are king. Decks are built around concepts, judgments are aggregate, single cards and small packages never decide a deck.
 - 2026-11-20: Created from the user's baseline, 37 land, 10 ramp, 10 draw, 8 removal, 8 protection, 26 synergy, and the multi-role rule.

@@ -15,7 +15,7 @@ It prints the deck name to stderr. The commander is left out. Lands get their ow
 1. **Proposal.** Spawn 5 agents in parallel. Each gets only the deck.tsv path and this brief, none of your views:
    - Work out the deck's intent, meaning how it plans to win.
    - Break the plan into its distinct synergy categories, 2 to 5 at most. An aristocrats deck has fodder, sac outlets and payoffs. A go-wide deck has token makers and pumpers.
-   - Ramp, Draw, Removal and Protection are fixed categories, so don't propose them.
+   - Ramp, Draw, Removal, Protection and Multipliers are fixed categories, so don't propose them.
    - Give each category a name, a one-line definition and 3 example cards.
    - Fewer is better. Only split a category when the two halves do different jobs in the plan.
 2. **Merge.** Combine the 5 answers into one candidate list. Keep what most agents found, merge near-duplicates, and note any split.
@@ -23,10 +23,11 @@ It prints the deck name to stderr. The commander is left out. Lands get their ow
 
 ## 3. Allocation
 
-The categories are Ramp, Draw, Removal, Protection, then the synergy categories.
+The categories are Ramp, Draw, Removal, Protection, Multipliers, then the synergy categories.
 - Ramp is mana rocks, dorks, cost reducers, land untappers and extra land drops.
 - Draw is card draw and card advantage.
 - Removal is burn, destroy, exile, bounce and wipes.
+- Multipliers are cards that double or copy what the engine produces, like doublers, trigger copiers and copy effects.
 - Protection is counterspells, shroud, hexproof, indestructible and anything that saves your pieces.
 
 1. **One agent allocates.** It gets deck.tsv, the final category list with definitions, and these rules:
@@ -35,7 +36,7 @@ The categories are Ramp, Draw, Removal, Protection, then the synergy categories.
    - List every other category the card really fills in this deck in `also`, comma-separated, blank if none. Only roles it does in this deck, not ones it could do in theory.
    - Output `alloc.tsv` with columns `name`, `category`, `reason` and `also`, using card names exactly as in deck.tsv.
 2. **Check it.**
-   `python3 <skill base directory>/check.py $SCRATCH/deck.tsv $SCRATCH/alloc.tsv Ramp Draw Removal Protection "<synergy 1>" ...`
+   `python3 <skill base directory>/check.py $SCRATCH/deck.tsv $SCRATCH/alloc.tsv Ramp Draw Removal Protection Multipliers "<synergy 1>" ...`
    It fails on any missing, repeated or unknown card or category, or an `also` that repeats the primary. It prints the count table and the multi-role count. Send failures back to the allocating agent until it passes.
 3. **Review loop.** Each round, spawn 3 agents with deck.tsv, the categories and alloc.tsv. Each returns either "no meaningful change" or a list of moves, written as card, from, to and why. A move can change a primary or add or drop an `also` role. A meaningful move fixes a card in the wrong role. A coin-flip between two fair homes doesn't count. Apply moves that 2 of 3 agents back, or that are clearly right on the oracle text. Run check.py after each round. Repeat until a round applies no moves, and stop after 5 rounds with the open disputes listed.
 
@@ -56,6 +57,7 @@ Overwrite any earlier categories.md for the same deck. Give the user the full pa
 
 ## Change log
 
+- 2026-11-20: Multipliers are a fixed category.
 - 2026-11-20: Loads deck-architecture first. Cards keep one primary category and list their other roles in `also`, check.py prints the multi-role count.
 
 - 2026-11-01: Created. Lands are a counted category, never allocated. Double-faced cards never count as lands, the user's rule.

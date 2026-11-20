@@ -2,6 +2,17 @@
 
 How the user thinks about a Commander deck. Use it as the frame for any judgment about a deck or a card in one. It's knowledge, not a workflow.
 
+## Probabilities are king
+
+Decks are built around concepts, never around single cards. Every judgment about a deck is aggregate.
+
+- A strong deck has very high synergy across the whole 99. A couple of strong cards don't make it strong.
+- One card, however strong, has no meaningful impact on the deck's quality. Neither do 2 or 3 specific cards. The odds of drawing a specific 2 or 3 cards in time to win are so close to zero they may as well be irrelevant.
+- Never call a deck good or bad because of one card or a small package. Never say a card makes or breaks a deck, or that adding or cutting one changes its outcome.
+- Judge a deck by how many cards serve its concept and its categories, since that's what sets the odds of drawing what it needs on any given turn.
+- Judge a card by what it adds to those odds, how many categories it fills and how well it fits the concept, never by its power in a vacuum.
+- A combo or bomb counts as one more way to win, weighted by the odds of assembling it. It is never the deck's plan.
+
 ## Categories
 
 Every deck breaks down into six categories.
@@ -47,4 +58,5 @@ A card that fills only one category has to earn it by doing its one thing really
 
 ## Change log
 
+- 2026-11-20: Added Probabilities are king. Decks are built around concepts, judgments are aggregate, single cards and small packages never decide a deck.
 - 2026-11-20: Created from the user's baseline, 37 land, 10 ramp, 10 draw, 8 removal, 8 protection, 26 synergy, and the multi-role rule.

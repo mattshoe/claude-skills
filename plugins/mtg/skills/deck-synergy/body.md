@@ -42,6 +42,8 @@ Spawn one agent with deck.tsv, the deck-architecture path, the categories and th
 - A card makes a tag by producing it as an effect, or by being a body the engine spends. A creature is fodder in aristocrats, so it makes `creature`. In a spellslinger deck it makes nothing.
 - In a tribal deck, being the type is the engine, so tag the type itself, like `dinosaur` or `elf`, and say so in the reason.
 - The commander gets makes and uses like any card. It's always in hand, so its links count on every draw.
+- Give every makes and uses tag a strength, like `dinosaur:3`. 3 is strong, the pair is the engine firing at full value, like Pantlaza with a high-toughness Dinosaur or a sac outlet with a death payoff. 2 is solid, a real link that does real work. 1 is weak, incidental, like an anthem or a minor bonus. A link counts the weaker of its two sides, so a 1-toughness Dinosaur is `dinosaur:1` even though Pantlaza uses `dinosaur:3`. Be stingy with 3. Save it for the deck's main engine firing at full value, never for a link that's merely good, since that's what separates a tight engine from a loose one. When a strength depends on stats, like toughness for Pantlaza, set the cut-offs once from the pt column, write them in the first reason, and apply them to every card. graph.py fails on a tag without a strength.
+- Don't tag the same link twice. If every Dinosaur entering is the whole point, `dinosaur` covers it, so don't add `etb` at the same strength.
 - Every tag made must be used by something in the deck and the other way round. A tag with only one side is either a mistake or an effect the engine doesn't care about, so drop it.
 - Use card names exactly as in deck.tsv.
 
@@ -55,19 +57,19 @@ python3 <skill base directory>/graph.py $SCRATCH/deck.tsv $SCRATCH/tags.tsv "<sy
 
 It fails on a missing, repeated or unknown card or category. Send failures back to the tagging agent until it passes.
 
-**Review loop.** Each round, spawn 3 agents with deck.tsv, the deck-architecture path, the categories and tags.tsv. Each looks for tags that link cards that don't really work together, missing tags on cards that do, and wrong categories. Rules details count here, like "another creature", exact damage amounts or who controls the source. Each returns "no meaningful change" or a list of fixes, card, change and why. Apply fixes 2 of 3 back, or that are clearly right on the oracle text. Rerun graph.py. Stop when a round applies nothing, or after 3 rounds with the disputes listed.
+**Review loop.** Each round, spawn 3 agents with deck.tsv, the deck-architecture path, the categories and tags.tsv. Each looks for tags that link cards that don't really work together, missing tags on cards that do, strengths set too high or too low, and wrong categories. Rules details count here, like "another creature", exact damage amounts or who controls the source. Each returns "no meaningful change" or a list of fixes, card, change and why. Apply fixes 2 of 3 back, or that are clearly right on the oracle text. Rerun graph.py. Stop when a round applies nothing, or after 3 rounds with the disputes listed.
 
 ## 4. Score
 
-graph.py builds the graph, where two cards are linked when one makes a tag the other uses, and the commander is always in hand. It simulates 20,000 draws at turns 3, 5 and 7, counting 7 + T cards seen. The score adds three groups.
+graph.py builds the graph, where two cards are linked when one makes a tag the other uses, weighted by the tag strengths. Each shared tag counts the weaker of its make and use sides, and a pair takes its strongest shared tag. The commander is always in hand. It simulates 20,000 draws at turns 3, 5 and 7, counting 7 + T cards seen, and 20,000 games of playing a land a turn and casting ramp. The score adds three groups.
 
-- **Coherence, 40.** Measured on engine cards, those in a synergy category as primary or also. Plain ramp, draw and removal have no tags and don't count against it. How often a drawn engine card has a live partner in hand at turn 5, 20 points. Engine share, the part of the engine in the largest linked cluster, 10. Multi-role share across all spells, 10.
+- **Coherence, 40.** Measured on engine cards, those in a synergy category as primary or also. Plain ramp, draw and removal have no tags and don't count against it. Live synergy at turn 5, 20 points, the average strength of each drawn engine card's best link to something else in hand, out of 3. Weighting is what stops tribal decks from maxing this out, since every Dinosaur links to every Dinosaur payoff but most of those links are weak. Engine share, the part of the engine in the largest cluster following only links of 2 or more, 10. Multi-role share across all spells, 10.
 - **Structure, 20.** Lands plus ramp, draw, removal, protection and engine cards against the deck-architecture baseline, 4 each. A card counts toward every category it fills. Pass `--base Mana=50` and the like when the user's plan moves the baseline.
-- **Speed, 40.** Average spell mana value, 15. Removal and protection at 2 or less, 10. Ramp at 1 or less, 8. Nonland tutors, 7. This group is what separates a coherent casual deck from cEDH.
+- **Speed, 40.** Mana on turn 4 from the simulation, 15, which covers land count, ramp count and how cheap the ramp is. A {C}{C} rock adds 2. Average spell mana value, 10. Removal and protection at 2 or less, 8. Nonland tutors, 7. This group is what separates a coherent casual deck from cEDH.
 
 The weights aim for a cEDH deck in the 90s, a tuned high-power deck in the 70s, a coherent casual deck around 50 to 60, and a pile of good cards with no engine in the 30s. Only the casual end is tested so far, a Pantlaza precon scored 56.
 
-The hubs section shows what happens to the engine without each of the 3 most linked cards. A big drop means the deck leans on one card. In tribal decks every member links to everything, so hubs barely move and that's expected. Orphans are spells with no link at all. Dangling tags point at a half-built step in the chain, or a tagging mistake.
+The hubs section shows what happens to the engine without each of the 3 most linked cards. A big drop means the deck leans on one card. In tribal decks every member links to everything, so hubs barely move and that's expected. Orphans are engine cards with no link at all. Plain ramp, draw and removal aren't listed, since they don't need links. Dangling tags point at a half-built step in the chain, or a tagging mistake.
 
 ## 5. Output
 
@@ -77,5 +79,7 @@ Write the full report to `~/Documents/mtg/<deck name>/synergy.md`, with the deck
 
 ## Change log
 
+- 2026-11-20: deck.tsv has power and toughness, strengths are required, no duplicate tags for one link.
+- 2026-11-20: Tag strengths 1 to 3 weight the links, so tribal decks stop maxing coherence. Speed simulates mana on turn 4 instead of counting fast mana.
 - 2026-11-20: Coherence measured on engine cards only, synergy added to structure, tribal type tags, no one-sided tags. From a test run on a Pantlaza precon that scored 50.
 - 2026-11-20: Created. Makes and uses tags build the graph, draws are simulated, score is coherence 40, structure 20, speed 40.

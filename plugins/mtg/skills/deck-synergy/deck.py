@@ -4,7 +4,7 @@
 Usage:
   deck.py DECK_KEY_OR_ID > deck.tsv                    (needs ~/.mtg-api.env loaded)
   deck.py --list FILE --commander "NAME" > deck.tsv    (one card per line, "1 Name" or "1x Name (SET) 123")
-Prints the deck name to stderr. Columns: qty, name, role, cost, mv, type, game_changer, text.
+Prints the deck name to stderr. Columns: qty, name, role, cost, mv, type, pt, game_changer, text. pt is power/toughness, faces joined with " // ".
 Double-faced cards join faces with " // ". Scryfall /cards/collection in batches of 75.
 """
 import json, os, re, sys, time, urllib.request
@@ -73,13 +73,14 @@ for i in range(0, len(names), 75):
         print('NOT FOUND ' + nf.get('name', ''), file=sys.stderr)
     time.sleep(0.1)
 
-print('qty\tname\trole\tcost\tmv\ttype\tgame_changer\ttext')
+print('qty\tname\trole\tcost\tmv\ttype\tpt\tgame_changer\ttext')
 for r in rows:
     c = oracle.get(r['name'].split(' // ')[0].lower())
     if not c:
-        print(f"{r['qty']}\t{r['name']}\t{r['role'] or ''}\t\t\t\t\t")
+        print(f"{r['qty']}\t{r['name']}\t{r['role'] or ''}\t\t\t\t\t\t")
         continue
     faces = c.get('card_faces') or [c]
     cost = ' // '.join(f.get('mana_cost', '') for f in faces)
     text = ' // '.join(f.get('oracle_text', '').replace('\n', ' | ') for f in faces)
-    print(f"{r['qty']}\t{r['name']}\t{r['role'] or ''}\t{cost}\t{int(c.get('cmc', 0))}\t{c['type_line']}\t{int(c.get('game_changer', False))}\t{text}")
+    pt = ' // '.join(f"{f['power']}/{f['toughness']}" for f in faces if 'power' in f)
+    print(f"{r['qty']}\t{r['name']}\t{r['role'] or ''}\t{cost}\t{int(c.get('cmc', 0))}\t{c['type_line']}\t{pt}\t{int(c.get('game_changer', False))}\t{text}")

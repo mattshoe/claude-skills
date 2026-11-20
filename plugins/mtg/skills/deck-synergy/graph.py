@@ -4,18 +4,21 @@
 Usage: graph.py deck.tsv tags.tsv "SYNERGY 1" ["SYNERGY 2" ...] [--base Mana=47 Draw=10 Removal=8 Protection=8]
                 [--reference "DECK NAME" BRACKET]   adds this deck to reference.tsv
 
-tags.tsv columns: name, category, also, makes, uses, reason, finds, mana, modifies
+tags.tsv columns: name, category, also, makes, uses, reason, finds, mana, modifies, cards, fire
 - also, makes and uses are comma-separated. also may hold Elite. makes and uses tags carry a strength, dinosaur:3, 1 to 3.
 - finds, tutors only, semicolon-separated: any, a front-face card type, a tag, a card name, or mv=N.
 - mana, mana sources only: amount and timing, "2 now", "1 next", "3 once". now taps the turn it lands, next from the
   following turn, once is spent a single time. Lands without a row make 1, tapped lands from next turn.
 - modifies: changes to mana output while the card is in play, "mana+1" for every nonland source, "land+1", "all*2".
+- cards, card draw sources only: same format as mana. "1 next" draws an extra card every turn from next turn, "2 once" draws 2 once.
+- fire: extra mana the card needs before its links work, on top of casting it, like 5 for Najeela's WUBRG.
 
 The simulator knows nothing about specific cards. Each game it plays a land, casts mana sources cheapest first, casts the
-commander once it can, and lets each tutor fetch the card that completes the most strong links. The engine is online the
-first turn two linked cards are available, each fits one turn's mana and together they fit the mana left over so far.
-The engine turn averages that turn for strong links (3) and solid links (2 or more). The score places it among the
-reference decks.
+commander once it can, casts draw sources, and lets each tutor fetch the card that adds the most link weight. Each turn
+it looks for the best castable group of up to 3 cards. A strong link is worth 6, a solid link 2, a weak one nothing.
+The engine is online the first turn a group reaches 6, a strong pair, or three cards all solidly linked to each other.
+A hub with loose spokes doesn't count, and more groups means online in more games, which is redundancy.
+The score places that turn among the reference decks.
 """
 import csv, os, random, re, statistics, sys
 from collections import defaultdict
@@ -61,14 +64,23 @@ def strengths(s, name):
     return out
 
 
-def mana_spec(s, name):
+def mana_spec(s, name, col='mana'):
     if not s.strip():
         return None
     m = re.fullmatch(r'(\d+)\s+(now|next|once)', s.strip().lower())
     if not m:
-        errors.append(f'mana must look like "2 now", "1 next" or "3 once": {s!r} on {name}')
+        errors.append(f'{col} must look like "2 now", "1 next" or "3 once": {s!r} on {name}')
         return None
     return int(m.group(1)), m.group(2)
+
+
+def fire(s, name):
+    if not s.strip():
+        return 0
+    if not s.strip().isdigit():
+        errors.append(f'fire must be a whole number of mana: {s!r} on {name}')
+        return 0
+    return int(s)
 
 
 def modifiers(s, name):
@@ -86,7 +98,7 @@ tags = {}
 for row in csv.reader(open(tags_f), delimiter='\t'):
     if not row or row[0] in ('name', ''):
         continue
-    row += [''] * (9 - len(row))
+    row += [''] * (11 - len(row))
     name, cat = row[0].strip(), row[1].strip()
     also = split(row[2])
     d = deck.get(name)
@@ -102,7 +114,8 @@ for row in csv.reader(open(tags_f), delimiter='\t'):
         if (c not in cats and c != 'Elite') or c == cat:
             errors.append(f'bad also {c!r}: {name}')
     tags[name] = dict(cat=cat, also=also, makes=strengths(row[3], name), uses=strengths(row[4], name),
-                      finds=[f.lower() for f in split(row[6], ';')], mana=mana_spec(row[7], name), mods=modifiers(row[8], name))
+                      finds=[f.lower() for f in split(row[6], ';')], mana=mana_spec(row[7], name), mods=modifiers(row[8], name),
+                      cards=mana_spec(row[9], name, 'cards'), fire=fire(row[10], name))
 for n, d in deck.items():
     if not d['land'] and n not in tags:
         errors.append(f'missing: {n}')
@@ -111,7 +124,7 @@ if errors:
     sys.exit(1)
 for n, d in deck.items():
     if n not in tags:
-        tags[n] = dict(cat='Land', also=[], makes={}, uses={}, finds=[], mana=None, mods=[])
+        tags[n] = dict(cat='Land', also=[], makes={}, uses={}, finds=[], mana=None, mods=[], cards=None, fire=0)
     if d['land'] and not tags[n]['mana']:
         tapped = (re.search(r'enters (the battlefield )?tapped', d['text'], re.I)
                   and not re.search(r"tapped unless|if you don't, it enters", d['text'], re.I))
@@ -190,16 +203,46 @@ def output(n, on):
 
 # Simulation
 library = [n for n, d in deck.items() if not d['cmdr'] for _ in range(d['qty'])]
-SIMS, LAST = 10000, 10
+SIMS, LAST, POWER = 10000, 10, 6
 rng = random.Random(1)
-online, mana_at = {3: [], 2: []}, defaultdict(float)
+online, mana_at = [], defaultdict(float)
+
+
+# What each link strength adds to engine power. A strong pair alone is the engine, three cards all linked solidly to
+# each other are too, weak links are incidental and add nothing
+POWER_OF = {1: 0, 2: 2, 3: 6}
+pw = defaultdict(dict, {x: {y: POWER_OF[w] for y, w in d.items() if POWER_OF[w]} for x, d in wt.items()})
+
+
+def assemble(avail, budget, peak):
+    """Power of the best castable group of up to 3 cards: each card fits one turn's mana, together they fit the budget."""
+    ok = [c for c in avail if avail[c] <= peak]
+    best = 0
+    for x in ok:
+        for y, wxy in pw[x].items():
+            if y not in avail or avail[y] > peak or y <= x or avail[x] + avail[y] > budget:
+                continue
+            best = max(best, wxy)
+            if best >= POWER:
+                return best
+            for z, wxz in pw[x].items():  # a triple counts only when all three cards link to each other
+                if z > y and z in avail and z in pw[y] and avail[x] + avail[y] + avail[z] <= budget and avail[z] <= peak:
+                    best = max(best, wxy + wxz + pw[y][z])
+                    if best >= POWER:
+                        return best
+    return best
+
+
 for _ in range(SIMS):
     lib = library[:]
     rng.shuffle(lib)
     hand, pos, play, waking = lib[:7], 7, [], []
-    cast_cmdr, banked, peak, found = False, 0, 0, {}
+    cast_cmdr, banked, peak, found, rate, rate_next = False, 0, 0, None, 0, 0
     for t in range(1, LAST + 1):
-        hand.append(lib[pos]); pos += 1
+        rate += rate_next; rate_next = 0
+        for _ in range(1 + rate):
+            if pos < len(lib):
+                hand.append(lib[pos]); pos += 1
         play += waking; waking = []
         lands = [c for c in hand if deck[c]['land']]
         land = next((c for c in lands if is_src(c, ('now',))), lands[0] if lands else None)
@@ -208,7 +251,8 @@ for _ in range(SIMS):
             (play if is_src(land, ('now',)) else waking).append(land)
         on = play + ([commander] if cast_cmdr else [])
         pool = sum(output(c, on) for c in play)
-        once = sum(max(output(c, on) - cost(c), 0) for c in hand if is_src(c, ('once',)))
+        once_cards = [c for c in hand if is_src(c, ('once',))]
+        once = sum(max(output(c, on) - cost(c), 0) for c in once_cards)
         made = pool + once
         for c in sorted((c for c in hand if is_src(c, ('now', 'next')) and not deck[c]['land']), key=cost):
             if cost(c) <= pool:
@@ -218,42 +262,47 @@ for _ in range(SIMS):
                 else:
                     waking.append(c)
         if not cast_cmdr and pool + once >= deck[commander]['mv']:
-            cast_cmdr = True; pool -= deck[commander]['mv']
-            if pool < 0:
-                once += pool; pool = 0
+            cast_cmdr, pool = True, pool - deck[commander]['mv']
+            for c in sorted(once_cards, key=lambda c: -output(c, on)):  # one-shot mana is spent, not reused
+                if pool >= 0:
+                    break
+                hand.remove(c); got = max(output(c, on) - cost(c), 0); pool += got; once -= got
+        # Card draw sources, cheapest first with what's left
+        for c in sorted((c for c in hand if tags[c]['cards'] and not deck[c]['land'] and c not in play), key=cost):
+            if cost(c) <= pool:
+                hand.remove(c); pool -= cost(c)
+                n, kind = tags[c]['cards']
+                if kind == 'once':
+                    for _ in range(n):
+                        if pos < len(lib):
+                            hand.append(lib[pos]); pos += 1
+                elif kind == 'now':
+                    rate += n
+                else:
+                    rate_next += n
         if t <= 4:
             mana_at[t] += made
-        banked += pool
+        banked += max(pool, 0)
         peak = max(peak, made)
-        # Online when two linked cards are available, each fits one turn's mana, and together they fit what's been left over
-        avail = {c: cost(c) for c in set(lib[:pos]) if c not in play and c not in waking and c in solid}
-        for c in play + waking:
-            avail[c] = 0
-        avail[commander] = 0 if cast_cmdr else deck[commander]['mv']
-        for tu in [c for c in set(lib[:pos]) if c in findable]:
+        # Engine power is the link weight among cards that are available and affordable. Online once it reaches POWER.
+        seen = set(lib[:pos])
+        inplay = set(play + waking)
+        avail = {c: (0 if c in inplay else cost(c)) + tags[c]['fire'] for c in seen if pw.get(c)}
+        avail[commander] = (0 if cast_cmdr else deck[commander]['mv']) + tags[commander]['fire']
+        for tu in [c for c in seen if c in findable]:
             best = max((c for c in findable[tu] if c not in avail),
-                       key=lambda c: (len(strong[c] & avail.keys()), len(solid[c] & avail.keys())), default=None)
-            if best and solid[best] & avail.keys():
-                avail[best] = cost(best) + cost(tu)
-        budget = banked + once
-        for level, links in ((3, strong), (2, solid)):
-            if level in found:
-                continue
-            for x, cx in avail.items():
-                if cx <= peak and any(y in avail and avail[y] <= peak and cx + avail[y] <= budget for y in links[x]):
-                    found[level] = t
-                    break
-        if 3 in found and t >= 4:  # play on to turn 4 so the mana figures cover every game
+                       key=lambda c: sum(pw[c].get(x, 0) for x in avail), default=None)
+            if best and any(x in avail for x in pw[best]):
+                avail[best] = cost(best) + cost(tu) + tags[best]['fire']
+        if found is None and assemble(avail, banked + once, peak) >= POWER:
+            found = t
+        if found and t >= 4:  # play on to turn 4 so the mana figures cover every game
             break
-    for level in (3, 2):
-        online[level].append(found.get(level, LAST + 1))
+    online.append(found or LAST + 1)
 for t in mana_at:
     mana_at[t] /= SIMS
-# The engine turn averages when a strong link comes online and when any solid link does, so a deck without a full engine
-# still separates from one with nothing
-on3, on2 = statistics.mean(online[3]), statistics.mean(online[2])
-avg_online = (on3 + on2) / 2
-by = lambda T, level: sum(o <= T for o in online[level]) / SIMS
+avg_online = statistics.mean(online)
+by = lambda T: sum(o <= T for o in online) / SIMS
 
 # Score, placed among the reference decks. Each bracket's median online turn anchors a score.
 TARGET = {1: 20, 2: 40, 3: 60, 4: 75, 5: 92}
@@ -288,19 +337,22 @@ multi = sum(deck[n]['qty'] for n in spells if tags[n]['also']) / N
 avg_mv = sum(cost(n) * deck[n]['qty'] for n in spells) / N
 cheap = sum(deck[n]['qty'] for n in spells if cost(n) <= 2 and (fills(n, 'Removal') or fills(n, 'Protection')))
 pairs = sum(len(v) for v in strong.values()) // 2
+all_links = sum(len(v) for v in wt.values()) // 2 or 1
+share3 = pairs / all_links
 orphans = sorted(n for n in engine_cards if not wt[n] and not deck[n]['cmdr'] and n not in tutors)
 hubs = sorted(tags, key=lambda n: -len(strong[n]))[:3]
 made_tags = {t for n in tags for t in tags[n]['makes']}
 used_tags = {t for n in tags for t in tags[n]['uses']}
 
 print(f'## Score {score:.0f} / 100\n')
-print(f'Engine turn {avg_online:.1f}, the average of strong links online on turn {on3:.1f} and solid links on turn {on2:.1f}, never counted as {LAST + 1}. '
+print(f'Engine turn {avg_online:.1f}, the first turn a castable strong pair or fully linked triple is assembled, never counted as {LAST + 1}. '
       f'Reference decks, {len(ref)}: ' + (', '.join(f'bracket {b} median {statistics.median(v):.1f}' for b, v in sorted(med.items())) or 'none') + '.\n')
-print('| Online by turn | 3 | 4 | 5 | 6 | 8 | 10 |\n|---|---|---|---|---|---|---|')
-for level, label in ((3, 'Strong link, 3'), (2, 'Solid link, 2 or more')):
-    print(f'| {label} | ' + ' | '.join(f'{by(T, level):.0%}' for T in (3, 4, 5, 6, 8, 10)) + ' |')
+print('| By turn | 3 | 4 | 5 | 6 | 8 | 10 |\n|---|---|---|---|---|---|---|')
+print('| Online | ' + ' | '.join(f'{by(T):.0%}' for T in (3, 4, 5, 6, 8, 10)) + ' |')
+if share3 > 0.10 and pairs > 5:
+    print(f'\nWARNING: {share3:.0%} of links are strength 3. A 3 means the two cards alone push toward winning, so check them in review.')
 print('\n## Diagnostics\n\n| Measure | Value |\n|---|---|')
-print(f'| Strong links, strength 3 | {pairs} |')
+print(f'| Links of 3, 2 and 1 | {pairs}, {sum(len(v) for v in solid.values()) // 2 - pairs}, {all_links - sum(len(v) for v in solid.values()) // 2} |')
 print(f'| Engine share, links of 2 or more | {engine():.0%} |')
 print(f'| Multi-role or Elite spells | {multi:.0%} |')
 print(f'| Mana made on turns 2, 3, 4 | {mana_at[2]:.1f}, {mana_at[3]:.1f}, {mana_at[4]:.1f} |')

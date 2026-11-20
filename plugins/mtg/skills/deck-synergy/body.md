@@ -34,7 +34,7 @@ Show the derived categories with a line each and let the user correct them befor
 
 ## 3. Tag every card
 
-Spawn one agent with deck.tsv, the deck-architecture path, the categories and these rules. It writes `$SCRATCH/tags.tsv` with columns `name`, `category`, `also`, `makes`, `uses`, `reason`, `finds`.
+Spawn one agent with deck.tsv, the deck-architecture path, the categories and these rules. It writes `$SCRATCH/tags.tsv` with columns `name`, `category`, `also`, `makes`, `uses`, `reason`, `finds`, `mana`, `modifies`.
 
 - `category` is the card's primary job. Ramp, Draw, Removal, Protection or a synergy category. The commander's category is `Commander`. Lands are left out unless the engine uses them or they fill another role, a landfall land or a channel land that removes something, and then their category is `Land`. A card that fits no category goes in its nearest one with no `also`.
 - `also` is every other category the card really fills in this deck, comma-separated, blank if none. Add `Elite` to a single-role card that does its one job exceptionally well, among the best cards ever printed for that job at its cost, like Force of Will or Sol Ring. Elite counts toward the multi-role share, per the deck-architecture rule. Be strict, a good card isn't Elite.
@@ -43,6 +43,8 @@ Spawn one agent with deck.tsv, the deck-architecture path, the categories and th
 - Use the tag list below. Add a deck-specific tag only when nothing fits, and name it in the reason.
 - A card makes a tag by producing it as an effect, or by being a body the engine spends. A creature is fodder in aristocrats, so it makes `creature`. In a spellslinger deck it makes nothing.
 - In a tribal deck, being the type is the engine, so tag the type itself, like `dinosaur` or `elf`, and say so in the reason.
+- `mana` is for every mana source, rocks, dorks, rituals, treasure makers and land fetchers. Write the amount and when it works. `now` taps the turn it lands, like Sol Ring `2 now`. `next` works from next turn, like a dork `1 next` or Cultivate `1 next`. `once` is spent a single time, like Dark Ritual `3 once`, Lotus Petal `1 once` or Mana Vault `3 once`. Leave it blank for anything that doesn't reliably make mana, like a card that puts a land in hand. Lands make 1 by default and tapped lands work from next turn, so only give a land a row and a `mana` value when it makes more, like Ancient Tomb `2 now`.
+- `modifies` is for cards that change other sources' output while in play. `mana+1` adds 1 to every nonland source, like Kinnan. `land+1` adds to lands, like Mirari's Wake. `all*2` doubles everything, like Mana Reflection. The simulator applies these without knowing the card.
 - The commander gets makes and uses like any card. The simulation puts it in play once there's mana for it, so a cheap commander's links count almost every draw and a 10-drop's rarely do. Tag a flip commander by both faces.
 - Give every makes and uses tag a strength, like `dinosaur:3`. 3 is strong, the pair is the engine firing at full value, like Pantlaza with a high-toughness Dinosaur or a sac outlet with a death payoff. 2 is solid, a real link that does real work. 1 is weak, incidental, like an anthem or a minor bonus. A link counts the weaker of its two sides, so a 1-toughness Dinosaur is `dinosaur:1` even though Pantlaza uses `dinosaur:3`. Be stingy with 3. Save it for the deck's main engine firing at full value, never for a link that's merely good, since that's what separates a tight engine from a loose one. When a strength depends on stats, like toughness for Pantlaza, set the cut-offs once from the pt column, write them in the first reason, and apply them to every card. graph.py fails on a tag without a strength.
 - Don't tag the same link twice. If every Dinosaur entering is the whole point, `dinosaur` covers it, so don't add `etb` at the same strength. Two cards feeding each other both ways is a loop, not a duplicate, so tag both directions.
@@ -63,33 +65,25 @@ It fails on a missing, repeated or unknown card or category, or a tag without a 
 
 ## 4. Score
 
-graph.py builds the graph, where two cards are linked when one makes a tag the other uses, weighted by the tag strengths. Each shared tag counts the weaker of its make and use sides, and a pair takes its strongest shared tag. Then it plays 10,000 games to turn 7, seeing 7 + T cards by turn T. Each turn it plays a land, preferring an untapped one, and casts ramp cheapest first. Rocks make mana right away, dorks and land fetchers from next turn, and rituals and sacrificed sources once. Output comes from the card's Add text, so Sol Ring is 2 and Mana Vault 3. It casts the commander once there's mana for it, and each tutor seen fetches the card that links best to what's already there. The score adds three groups.
+graph.py builds the graph, where two cards are linked when one makes a tag the other uses, weighted by the tag strengths. Each shared tag counts the weaker of its make and use sides, and a pair takes its strongest shared tag.
 
-- **Coherence, 40.** Measured on engine cards, those in a synergy category as primary or also. Plain ramp, draw and removal have no tags and don't count against it. Live synergy at turn 5, 20 points, the average strength of each drawn engine card's best link to something else in hand, out of 3. Weighting is what stops tribal decks from maxing this out, since every Dinosaur links to every Dinosaur payoff but most of those links are weak. Engine share, the part of the engine in the largest cluster following only links of 2 or more, 10. Multi-role share across all spells, Elite included, 10.
-- **Structure, 10.** Mana, meaning lands plus ramp, then draw, removal and protection against the deck-architecture baseline, 2.5 each. A card counts toward every category it fills. Pass `--base Mana=50` and the like when the user's plan moves the baseline. Every functional deck gets most of these, so they're worth little.
-- **Speed, 50.** Mana on turn 3 from the simulation, 20. Average spell mana value, 10. Removal and protection at 2 or less, 10. Tutors, 10. Pitch spells like Force of Will count as costing 1. This group is what separates a coherent casual deck from cEDH.
+Then it plays 10,000 games to turn 10. It knows nothing about specific cards, only the tags. Each turn it plays a land, preferring an untapped one, casts mana sources cheapest first, applies modifiers, and casts the commander once it can. Each tutor fetches the card that completes the most strong links.
 
-Calibration, from real lists tagged under these rules:
+**The engine is online** the first turn two linked cards are both available, in hand, in play, fetched or the commander, each fits one turn's mana, and together they fit the mana left over so far. It's measured twice, for strong links of 3 and solid links of 2 or more, and the engine turn is the average of the two. So a deck with no full engine still separates from a deck with nothing. That one number covers synergy, ramp, curve and tutors together. A weak link never counts, so tribal decks full of strength-1 anthems don't come online early. A deck with many strong pairs comes online early in more games, which is redundancy, not one combo, and fits the deck-architecture rule that probabilities are king.
 
-| Deck | Bracket | Score |
-|---|---|---|
-| Najeela cEDH | 5 | 86 |
-| Kinnan cEDH Primer 2026 | 5 | 85 |
-| Veloci-Ramp-Tor precon | 2 | 43 |
-| Oops, All Jace! | 1 | 37 |
-| Bracket 1 Progenitus | 1 | 28 |
+**The score** places the engine turn among the reference decks in `<skill base directory>/reference.tsv`. Each bracket's median online turn anchors a score, bracket 1 at 20, 2 at 40, 3 at 60, 4 at 75 and 5 at 92, and the score is read off between them. Adding reference decks sharpens it without code changes. To add one, a real list with a known bracket, run graph.py with `--reference "DECK NAME" BRACKET`, then commit reference.tsv.
 
-So roughly, 85 and up is cEDH, 40s is a precon, and under 35 is a bracket 1 pile. 100 is a cEDH deck with nothing left to improve. The simulation doesn't model commander mana abilities like Kinnan's, so mana-doubling commanders read a little low.
-
-The hubs section shows what happens to the engine without each of the 3 cards with the most links of 2 or more. A big drop means the deck leans on one card. In tribal decks every member links to everything, so hubs barely move and that's expected. Orphans are engine cards with no link at all. Plain ramp, draw and removal aren't listed, since they don't need links. Dangling tags point at a half-built step in the chain, or a tagging mistake.
+The diagnostics under the score aren't scored. They explain it. Few strong links means a loose engine. Low mana on turn 3 means slow ramp. Orphans are engine cards with no link. Dangling tags point at a half-built step in the chain or a tagging mistake. Hubs show the cards with the most strong links and what the engine looks like without each.
 
 ## 5. Output
 
-In chat, give the score and the component table, then the 2 or 3 biggest things holding the score down, in terms of the whole deck, never one card.
+In chat, give the score, the online-by-turn table, then the 2 or 3 biggest things holding the score down, in terms of the whole deck, never one card.
 
 Write the full report to `~/Documents/mtg/<deck name>/synergy.md`, with the deck name from deck.py's stderr, or a name the user gives for a pasted list. It holds the categories and how they were chosen, all of graph.py's output, every card with its category, also, makes and uses, and a short log of each review round. Overwrite any earlier synergy.md for the same deck. Give the user the full path.
 
 ## Change log
+
+- 2026-11-20: Score is now the turn the engine comes online, placed among reference decks by bracket. Mana sources and modifiers are tag columns, so the simulator has no card-specific rules.
 
 - 2026-11-20: Tested on 2 cEDH lists, a precon and 2 bracket 1 decks. Tutors get a finds column, link to what they fetch and fetch in the simulation. Elite single-role cards. One simulation handles mana by source type, tapped lands, pitch spells and casting the commander. Weights moved to coherence 40, structure 10, speed 50.
 - 2026-11-20: deck.tsv has power and toughness, strengths are required, no duplicate tags for one link.

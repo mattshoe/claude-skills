@@ -1,21 +1,33 @@
 #!/usr/bin/env python3
-"""Build a deck's synergy graph from tags, measure it, and score the deck out of 100.
+"""Build a deck's synergy graph from tags, simulate games, and score the deck against real decks.
 
 Usage: graph.py deck.tsv tags.tsv "SYNERGY 1" ["SYNERGY 2" ...] [--base Mana=47 Draw=10 Removal=8 Protection=8]
-tags.tsv: name<TAB>category<TAB>also<TAB>makes<TAB>uses<TAB>reason<TAB>finds
-- also, makes and uses are comma-separated, blank if none. also may hold Elite, a single-role card that does its job exceptionally well.
-- Every makes and uses tag carries a strength, dinosaur:3, from 1 weak to 3 strong.
-- finds is only for tutors, semicolon-separated: any, a card type (creature, artifact, instant ...), a tag, a card name, or mv=N.
-Every nonland card has a row, the commander's category is Commander, lands get a row only when tagged (category Land).
-A link joins two cards when one makes a tag the other uses. Each shared tag counts the weaker of its two sides, a pair takes its strongest tag.
-Coherence is measured on engine cards, those in a synergy category as primary or also.
-One simulation plays 10,000 games: a land a turn, ramp cast cheapest first, the commander cast once there's mana for it,
-and each tutor seen fetching the card that links best to what's already there.
+                [--reference "DECK NAME" BRACKET]   adds this deck to reference.tsv
+
+tags.tsv columns: name, category, also, makes, uses, reason, finds, mana, modifies
+- also, makes and uses are comma-separated. also may hold Elite. makes and uses tags carry a strength, dinosaur:3, 1 to 3.
+- finds, tutors only, semicolon-separated: any, a front-face card type, a tag, a card name, or mv=N.
+- mana, mana sources only: amount and timing, "2 now", "1 next", "3 once". now taps the turn it lands, next from the
+  following turn, once is spent a single time. Lands without a row make 1, tapped lands from next turn.
+- modifies: changes to mana output while the card is in play, "mana+1" for every nonland source, "land+1", "all*2".
+
+The simulator knows nothing about specific cards. Each game it plays a land, casts mana sources cheapest first, casts the
+commander once it can, and lets each tutor fetch the card that completes the most strong links. The engine is online the
+first turn two linked cards are available, each fits one turn's mana and together they fit the mana left over so far.
+The engine turn averages that turn for strong links (3) and solid links (2 or more). The score places it among the
+reference decks.
 """
-import csv, random, re, sys
+import csv, os, random, re, statistics, sys
 from collections import defaultdict
 
+HERE = os.path.dirname(os.path.abspath(__file__))
+REF = os.path.join(HERE, 'reference.tsv')
 a = sys.argv[1:]
+record = None
+if '--reference' in a:
+    i = a.index('--reference')
+    record = (a[i + 1], int(a[i + 2]))
+    a = a[:i] + a[i + 3:]
 base = {'Mana': 47, 'Draw': 10, 'Removal': 8, 'Protection': 8}
 if '--base' in a:
     i = a.index('--base')
@@ -28,11 +40,10 @@ cats = ['Ramp', 'Draw', 'Removal', 'Protection'] + syn
 
 deck, commander, errors = {}, None, []
 for r in csv.DictReader(open(deck_f), delimiter='\t'):
-    faces = r['type'].split(' // ')
     text = r['text'] or ''
     deck[r['name']] = dict(
         qty=int(r['qty']), mv=int(r['mv'] or 0), text=text, type=r['type'].lower(), cmdr=r['role'] == 'commander',
-        land=all('Land' in f for f in faces),  # a Pathway is a land, a spell // land card never is
+        land=all('Land' in f for f in r['type'].split(' // ')),  # a Pathway is a land, a spell // land card never is
         pitch=bool(re.search(r"rather than pay (this spell's|its) mana cost|from your hand: add", text, re.I)))
     if r['role'] == 'commander':
         commander = r['name']
@@ -50,11 +61,32 @@ def strengths(s, name):
     return out
 
 
+def mana_spec(s, name):
+    if not s.strip():
+        return None
+    m = re.fullmatch(r'(\d+)\s+(now|next|once)', s.strip().lower())
+    if not m:
+        errors.append(f'mana must look like "2 now", "1 next" or "3 once": {s!r} on {name}')
+        return None
+    return int(m.group(1)), m.group(2)
+
+
+def modifiers(s, name):
+    out = []
+    for t in split(s):
+        m = re.fullmatch(r'(mana|land|all)([+*])(\d+)', t.lower().replace(' ', ''))
+        if not m:
+            errors.append(f'modifies must look like mana+1, land+1 or all*2: {t!r} on {name}')
+            continue
+        out.append((m.group(1), m.group(2), int(m.group(3))))
+    return out
+
+
 tags = {}
 for row in csv.reader(open(tags_f), delimiter='\t'):
     if not row or row[0] in ('name', ''):
         continue
-    row += [''] * (7 - len(row))
+    row += [''] * (9 - len(row))
     name, cat = row[0].strip(), row[1].strip()
     also = split(row[2])
     d = deck.get(name)
@@ -70,7 +102,7 @@ for row in csv.reader(open(tags_f), delimiter='\t'):
         if (c not in cats and c != 'Elite') or c == cat:
             errors.append(f'bad also {c!r}: {name}')
     tags[name] = dict(cat=cat, also=also, makes=strengths(row[3], name), uses=strengths(row[4], name),
-                      finds=[f.lower() for f in split(row[6], ';')])
+                      finds=[f.lower() for f in split(row[6], ';')], mana=mana_spec(row[7], name), mods=modifiers(row[8], name))
 for n, d in deck.items():
     if not d['land'] and n not in tags:
         errors.append(f'missing: {n}')
@@ -79,9 +111,20 @@ if errors:
     sys.exit(1)
 for n, d in deck.items():
     if n not in tags:
-        tags[n] = dict(cat='Land', also=[], makes={}, uses={}, finds=[])
+        tags[n] = dict(cat='Land', also=[], makes={}, uses={}, finds=[], mana=None, mods=[])
+    if d['land'] and not tags[n]['mana']:
+        tapped = (re.search(r'enters (the battlefield )?tapped', d['text'], re.I)
+                  and not re.search(r"tapped unless|if you don't, it enters", d['text'], re.I))
+        tags[n]['mana'] = (1, 'next' if tapped else 'now')
 
 # Graph
+fills = lambda n, c: tags[n]['cat'] == c or c in tags[n]['also']
+spells = [n for n in deck if not deck[n]['land'] and not deck[n]['cmdr']]
+N = sum(deck[n]['qty'] for n in spells)
+engine_cards = {n for n in deck if not deck[n]['land'] and any(fills(n, c) for c in syn)}
+E = sum(deck[n]['qty'] for n in engine_cards if not deck[n]['cmdr']) or 1
+
+
 def link(m, u):
     return max((min(m[t], u[t]) for t in m.keys() & u.keys()), default=0)
 
@@ -93,31 +136,26 @@ for i, x in enumerate(names):
         w = max(link(tags[x]['makes'], tags[y]['uses']), link(tags[y]['makes'], tags[x]['uses']))
         if w:
             wt[x][y] = wt[y][x] = w
-fills = lambda n, c: tags[n]['cat'] == c or c in tags[n]['also']
 tutors = sorted(n for n in tags if tags[n]['finds'])
 
 
 def can_find(tutor, c):
     d = deck[c]
+    front = d['type'].split(' // ')[0].split()
     for f in tags[tutor]['finds']:
-        front = d['type'].split(' // ')[0].split()
         if ((f == 'any' and not d['land']) or f in front or f in tags[c]['makes'] or f == c.lower()
                 or (f.startswith('mv=') and f[3:].isdigit() and d['mv'] == int(f[3:]) and c != tutor)):
             return True
     return False
 
 
-# A tutor links at 2 to every engine card it can fetch, since finding them is its job
-for tu in tutors:
-    for c in tags:
-        if c != tu and not deck[c]['land'] and any(fills(c, k) for k in syn) and can_find(tu, c):
-            wt[tu][c] = wt[c][tu] = max(wt[tu].get(c, 0), 2)
-# The engine cluster only follows links of 2 or more, so a deck of weak links doesn't read as one engine
+findable = {tu: {c for c in tags if c != tu and not deck[c]['cmdr'] and can_find(tu, c)} for tu in tutors}
+strong = defaultdict(set, {x: {y for y, w in d.items() if w == 3} for x, d in wt.items()})
+solid = defaultdict(set, {x: {y for y, w in d.items() if w >= 2} for x, d in wt.items()})
 nbr = defaultdict(set, {x: {y for y, w in d.items() if w >= 2} for x, d in wt.items()})
-spells = [n for n in deck if not deck[n]['land'] and not deck[n]['cmdr']]
-N = sum(deck[n]['qty'] for n in spells)
-engine_cards = {n for n in spells if any(fills(n, c) for c in syn)}
-E = sum(deck[n]['qty'] for n in engine_cards) or 1
+for tu in tutors:  # a tutor holds the engine together by reaching the cards it can fetch
+    for c in findable[tu] & engine_cards:
+        nbr[tu].add(c); nbr[c].add(tu)
 
 
 def engine(skip=None):
@@ -133,148 +171,157 @@ def engine(skip=None):
             comp.add(x)
             stack.extend(nbr[x] - comp)
         seen |= comp
-        best = max(best, sum(deck[n]['qty'] for n in comp if n in engine_cards))
+        best = max(best, sum(deck[n]['qty'] for n in comp if n in engine_cards and not deck[n]['cmdr']))
     return best / E
 
 
-eng = engine()
-orphans = sorted(n for n in engine_cards if not wt[n])
-multi = sum(deck[n]['qty'] for n in spells if tags[n]['also']) / N
-hubs = sorted((n for n in tags if not deck[n]['cmdr']), key=lambda n: -len(nbr[n]))[:3]
-made = {t for n in tags for t in tags[n]['makes']}
-used = {t for n in tags for t in tags[n]['uses']}
-# Mana. A permanent's output comes from its "Add" text, sacrificed or non-untapping sources are one-shot
-WORDS = {'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5}
+cost = lambda n: min(deck[n]['mv'], 1) if deck[n]['pitch'] else deck[n]['mv']
+is_src = lambda n, kinds: tags[n]['mana'] is not None and tags[n]['mana'][1] in kinds
 
 
-def output(text):
-    m = re.search(r'add ((?:\{[^}]+\})+)', text, re.I)
-    if m:
-        return len(re.findall(r'\{', m.group(1)))
-    m = re.search(r'add (one|two|three|four|five) mana', text, re.I)
-    return WORDS[m.group(1).lower()] if m else 1
+def output(n, on):
+    amt = tags[n]['mana'][0]
+    for m in on:
+        for target, op, k in tags[m]['mods']:
+            if target == 'all' or (target == 'land') == deck[n]['land']:
+                amt = amt + k if op == '+' else amt * k
+    return amt
 
 
-def ramp_kind(n):
-    d = deck[n]
-    if 'add' not in d['text'].lower():
-        if re.search(r'land cards? [^.]*onto the battlefield|put [^.]*lands? [^.]*onto the battlefield|play an additional land', d['text'], re.I):
-            return 'later'  # puts a land into play, mana from next turn
-        if re.search(r'create [^.]*treasure', d['text'], re.I):
-            return 'once'
-        return 'none'  # puts a land in hand or ramps conditionally, no simulated mana
-    if ('instant' in d['type'] or 'sorcery' in d['type']
-            or re.search(r"sacrifice [^:]*: add|doesn't untap|from your hand: add", d['text'], re.I)):
-        return 'once'
-    return 'later' if 'creature' in d['type'] else 'now'
-
-
-ramp = {n: (ramp_kind(n), output(deck[n]['text'])) for n in spells if fills(n, 'Ramp')}
-land_out = {n: output(deck[n]['text']) for n in deck if deck[n]['land']}
-tapped = {n for n in land_out if re.search(r'enters (the battlefield )?tapped', deck[n]['text'], re.I)
-          and not re.search(r"tapped unless|if you don't, it enters", deck[n]['text'], re.I)}
-
+# Simulation
 library = [n for n, d in deck.items() if not d['cmdr'] for _ in range(d['qty'])]
-cmv = deck[commander]['mv']
-rng, SIMS = random.Random(1), 10000
-mana_at = defaultdict(float)
-live, cover = defaultdict(float), defaultdict(float)
+SIMS, LAST = 10000, 10
+rng = random.Random(1)
+online, mana_at = {3: [], 2: []}, defaultdict(float)
 for _ in range(SIMS):
     lib = library[:]
     rng.shuffle(lib)
-    hand, perm, cast_cmdr = lib[:7], 0, False
-    for t in range(1, 8):
-        hand.append(lib[6 + t])
+    hand, pos, play, waking = lib[:7], 7, [], []
+    cast_cmdr, banked, peak, found = False, 0, 0, {}
+    for t in range(1, LAST + 1):
+        hand.append(lib[pos]); pos += 1
+        play += waking; waking = []
         lands = [c for c in hand if deck[c]['land']]
-        land = next((c for c in lands if c not in tapped), lands[0] if lands else None)
-        new_tapped = 0
+        land = next((c for c in lands if is_src(c, ('now',))), lands[0] if lands else None)
         if land:
             hand.remove(land)
-            if land in tapped:
-                new_tapped = land_out[land]
-            else:
-                perm += land_out[land]
-        pool, later, invested = perm, new_tapped, 0
-        # One-shot mana stays in hand for the turn it's needed, so it counts toward this turn's mana without being spent
-        held = sum(max(ramp[c][1] - (0 if deck[c]['pitch'] else deck[c]['mv']), 0) for c in hand if c in ramp and ramp[c][0] == 'once')
-        for c in sorted((c for c in hand if c in ramp and ramp[c][0] in ('now', 'later')), key=lambda c: deck[c]['mv']):
-            cost = 0 if deck[c]['pitch'] else deck[c]['mv']
-            if cost > pool:
-                continue
-            hand.remove(c)
-            kind, out = ramp[c]
-            pool -= cost
-            if kind == 'now':
-                pool += out; perm += out
-            elif kind == 'once':
-                pool += out
-            else:
-                later += out; invested += cost
-        # Mana this turn is what's left for spells, plus what went into ramp that pays off next turn
+            (play if is_src(land, ('now',)) else waking).append(land)
+        on = play + ([commander] if cast_cmdr else [])
+        pool = sum(output(c, on) for c in play)
+        once = sum(max(output(c, on) - cost(c), 0) for c in hand if is_src(c, ('once',)))
+        made = pool + once
+        for c in sorted((c for c in hand if is_src(c, ('now', 'next')) and not deck[c]['land']), key=cost):
+            if cost(c) <= pool:
+                hand.remove(c); pool -= cost(c)
+                if is_src(c, ('now',)):
+                    play.append(c); gain = output(c, on + [c]); pool += gain; made += gain
+                else:
+                    waking.append(c)
+        if not cast_cmdr and pool + once >= deck[commander]['mv']:
+            cast_cmdr = True; pool -= deck[commander]['mv']
+            if pool < 0:
+                once += pool; pool = 0
         if t <= 4:
-            mana_at[t] += pool + invested + held
-        if not cast_cmdr and pool + invested + held >= cmv:
-            cast_cmdr = True
-        perm += later
-        if t in (3, 5, 7):
-            seen = set(lib[:7 + t])
-            have = seen | ({commander} if cast_cmdr else set())
-            rest = [c for c in lib[7 + t:] if not deck[c]['land']]
-            for tu in (c for c in seen if c in tags and tags[c]['finds']):
-                best = max((c for c in rest if c not in have and can_find(tu, c)),
-                           key=lambda c: sum(wt[c].get(h, 0) for h in have), default=None)
-                if best:
-                    have.add(best)
-            drawn = [n for n in have if n in engine_cards]
-            if drawn:
-                live[t] += sum(max((wt[n][p] for p in have if p in wt[n] and p != n), default=0) for n in drawn) / len(drawn) / 3
-            cover[t] += sum(any(fills(n, c) for n in have) for c in ('Ramp', 'Draw', 'Removal', 'Protection')) / 4
-for d in (mana_at, live, cover):
-    for k in d:
-        d[k] /= SIMS
+            mana_at[t] += made
+        banked += pool
+        peak = max(peak, made)
+        # Online when two linked cards are available, each fits one turn's mana, and together they fit what's been left over
+        avail = {c: cost(c) for c in set(lib[:pos]) if c not in play and c not in waking and c in solid}
+        for c in play + waking:
+            avail[c] = 0
+        avail[commander] = 0 if cast_cmdr else deck[commander]['mv']
+        for tu in [c for c in set(lib[:pos]) if c in findable]:
+            best = max((c for c in findable[tu] if c not in avail),
+                       key=lambda c: (len(strong[c] & avail.keys()), len(solid[c] & avail.keys())), default=None)
+            if best and solid[best] & avail.keys():
+                avail[best] = cost(best) + cost(tu)
+        budget = banked + once
+        for level, links in ((3, strong), (2, solid)):
+            if level in found:
+                continue
+            for x, cx in avail.items():
+                if cx <= peak and any(y in avail and avail[y] <= peak and cx + avail[y] <= budget for y in links[x]):
+                    found[level] = t
+                    break
+        if 3 in found and t >= 4:  # play on to turn 4 so the mana figures cover every game
+            break
+    for level in (3, 2):
+        online[level].append(found.get(level, LAST + 1))
+for t in mana_at:
+    mana_at[t] /= SIMS
+# The engine turn averages when a strong link comes online and when any solid link does, so a deck without a full engine
+# still separates from one with nothing
+on3, on2 = statistics.mean(online[3]), statistics.mean(online[2])
+avg_online = (on3 + on2) / 2
+by = lambda T, level: sum(o <= T for o in online[level]) / SIMS
 
-# Structure and speed. Pitch spells count as costing 1
-cost = lambda n: min(deck[n]['mv'], 1) if deck[n]['pitch'] else deck[n]['mv']
-nonland = [n for n in tags if not deck[n]['cmdr']]
-count = {c: sum(deck[n]['qty'] for n in nonland if fills(n, c)) for c in cats}
+# Score, placed among the reference decks. Each bracket's median online turn anchors a score.
+TARGET = {1: 20, 2: 40, 3: 60, 4: 75, 5: 92}
+ref = list(csv.DictReader(open(REF), delimiter='\t')) if os.path.exists(REF) else []
+if record:
+    ref = [r for r in ref if r['deck'] != record[0]] + [{'deck': record[0], 'bracket': str(record[1]), 'online': f'{avg_online:.2f}'}]
+    with open(REF, 'w') as f:
+        f.write('deck\tbracket\tonline\n')
+        for r in sorted(ref, key=lambda r: float(r['online'])):
+            f.write(f"{r['deck']}\t{r['bracket']}\t{r['online']}\n")
+med = defaultdict(list)
+for r in ref:
+    med[int(r['bracket'])].append(float(r['online']))
+anchors = sorted([(statistics.median(v), TARGET[b]) for b, v in med.items()] + [(2.0, 100), (LAST + 1.0, 0)])
+
+
+def place(x):
+    for (x0, y0), (x1, y1) in zip(anchors, anchors[1:]):
+        if x0 <= x <= x1:
+            return y0 + (y1 - y0) * (x - x0) / (x1 - x0) if x1 > x0 else y0
+    return 100 if x < anchors[0][0] else 0
+
+
+score = max(0, min(100, place(avg_online)))
+
+# Diagnostics, not scored
 lands = sum(d['qty'] for d in deck.values() if d['land'])
-have = {'Mana': lands + sum(deck[n]['qty'] for n in spells if fills(n, 'Ramp')), 'Draw': count['Draw'], 'Removal': count['Removal'], 'Protection': count['Protection']}
+count = {c: sum(deck[n]['qty'] for n in tags if not deck[n]['cmdr'] and fills(n, c)) for c in cats}
+have = {'Mana': lands + sum(deck[n]['qty'] for n in spells if fills(n, 'Ramp')), 'Draw': count['Draw'],
+        'Removal': count['Removal'], 'Protection': count['Protection']}
+multi = sum(deck[n]['qty'] for n in spells if tags[n]['also']) / N
 avg_mv = sum(cost(n) * deck[n]['qty'] for n in spells) / N
 cheap = sum(deck[n]['qty'] for n in spells if cost(n) <= 2 and (fills(n, 'Removal') or fills(n, 'Protection')))
-n_tutors = sum(deck[n]['qty'] for n in tutors if not deck[n]['cmdr'])
-
-lin = lambda x, lo, hi: max(0.0, min(1.0, (x - lo) / (hi - lo)))
-parts = [
-    ('Coherence', 'Live synergy at turn 5', 20, lin(live[5] * 3, 1.0, 2.4), f'drawn engine cards average {live[5] * 3:.1f} of 3 on their best live link'),
-    ('Coherence', 'Engine share', 10, lin(eng, 0.3, 0.9), f'{eng:.0%} of engine cards in the largest cluster'),
-    ('Coherence', 'Multi-role share', 10, lin(multi, 0.2, 0.6), f'{multi:.0%} of spells fill 2+ categories or are Elite'),
-] + [('Structure', k, 2.5, min(have[k] / base[k], 1.0), f'{have[k]} of {base[k]}') for k in ('Mana', 'Draw', 'Removal', 'Protection')] + [
-    ('Speed', 'Mana on turn 3', 20, lin(mana_at[3], 2.8, 4.6), f'{mana_at[3]:.1f} on average, {mana_at[2]:.1f} on turn 2, {mana_at[4]:.1f} on turn 4'),
-    ('Speed', 'Average spell mana value', 10, lin(-avg_mv, -3.5, -1.8), f'{avg_mv:.2f}, pitch spells count as 1'),
-    ('Speed', 'Cheap interaction', 10, lin(cheap, 4, 22), f'{cheap} removal or protection at 2 or less'),
-    ('Speed', 'Tutors', 10, lin(n_tutors, 1, 10), f'{n_tutors} tutors'),
-]
-score = sum(w * f for _, _, w, f, _ in parts)
+pairs = sum(len(v) for v in strong.values()) // 2
+orphans = sorted(n for n in engine_cards if not wt[n] and not deck[n]['cmdr'] and n not in tutors)
+hubs = sorted(tags, key=lambda n: -len(strong[n]))[:3]
+made_tags = {t for n in tags for t in tags[n]['makes']}
+used_tags = {t for n in tags for t in tags[n]['uses']}
 
 print(f'## Score {score:.0f} / 100\n')
-print('| Group | Part | Points | Detail |\n|---|---|---|---|')
-for g, p, w, f, d in parts:
-    print(f'| {g} | {p} | {w * f:.1f} / {w:g} | {d} |')
-print('\n## Draws, tutors fetching\n\n| Turn | Live synergy, of 3 | Core categories in hand |\n|---|---|---|')
-for T in (3, 5, 7):
-    print(f'| {T} | {live[T] * 3:.1f} | {cover[T]:.0%} |')
+print(f'Engine turn {avg_online:.1f}, the average of strong links online on turn {on3:.1f} and solid links on turn {on2:.1f}, never counted as {LAST + 1}. '
+      f'Reference decks, {len(ref)}: ' + (', '.join(f'bracket {b} median {statistics.median(v):.1f}' for b, v in sorted(med.items())) or 'none') + '.\n')
+print('| Online by turn | 3 | 4 | 5 | 6 | 8 | 10 |\n|---|---|---|---|---|---|---|')
+for level, label in ((3, 'Strong link, 3'), (2, 'Solid link, 2 or more')):
+    print(f'| {label} | ' + ' | '.join(f'{by(T, level):.0%}' for T in (3, 4, 5, 6, 8, 10)) + ' |')
+print('\n## Diagnostics\n\n| Measure | Value |\n|---|---|')
+print(f'| Strong links, strength 3 | {pairs} |')
+print(f'| Engine share, links of 2 or more | {engine():.0%} |')
+print(f'| Multi-role or Elite spells | {multi:.0%} |')
+print(f'| Mana made on turns 2, 3, 4 | {mana_at[2]:.1f}, {mana_at[3]:.1f}, {mana_at[4]:.1f} |')
+print(f'| Average spell cost, pitch as 1 | {avg_mv:.2f} |')
+print(f'| Removal or protection at 2 or less | {cheap} |')
+for k in ('Mana', 'Draw', 'Removal', 'Protection'):
+    print(f'| {k} against baseline | {have[k]} of {base[k]} |')
 print('\n## Categories, primary or also\n\n| Category | Cards |\n|---|---|')
 for c in cats:
     print(f'| {c} | {count[c]} |')
 print(f'| Lands | {lands} |')
-print(f'\n## Hubs\n')
+print('\n## Hubs, most strong links\n')
 for h in hubs:
-    print(f'- {h}: {len(nbr[h])} links of 2 or more, engine share without it {engine(h):.0%}')
-print(f'\n## Orphans, {len(orphans)} engine cards with no synergy link\n')
+    print(f'- {h}: strong links {len(strong[h])}, engine share without it {engine(h):.0%}')
+print(f'\n## Orphans, {len(orphans)} engine cards with no link\n')
 for o in orphans:
     print(f'- {o} ({tags[o]["cat"]})')
 print('\n## Dangling tags\n')
-print('- Made, nobody uses: ' + (', '.join(sorted(made - used)) or 'none'))
-print('- Used, nobody makes: ' + (', '.join(sorted(used - made)) or 'none'))
+print('- Made, nobody uses: ' + (', '.join(sorted(made_tags - used_tags)) or 'none'))
+print('- Used, nobody makes: ' + (', '.join(sorted(used_tags - made_tags)) or 'none'))
 if tutors:
-    print('\n## Tutors\n\n' + ', '.join(f'{t} ({"; ".join(tags[t]["finds"])})' for t in tutors))
+    print('\n## Tutors\n\n' + ', '.join(f'{t} ({len(findable[t])} targets)' for t in tutors))
+if record:
+    print(f'\nAdded to reference.tsv as {record[0]}, bracket {record[1]}.')

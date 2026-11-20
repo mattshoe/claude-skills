@@ -16,8 +16,8 @@ tags.tsv columns: name, category, also, makes, uses, reason, finds, mana, modifi
 The simulator knows nothing about specific cards. Each game it plays a land, casts mana sources cheapest first, casts the
 commander once it can, casts draw sources, and lets each tutor fetch the card that adds the most link weight. Each turn
 it looks for the best castable group of up to 3 cards. A strong link is worth 6, a solid link 2, a weak one nothing.
-The engine is online the first turn a group reaches 6, a strong pair, or three cards all solidly linked to each other.
-A hub with loose spokes doesn't count, and more groups means online in more games, which is redundancy.
+The engine is online the first turn a group reaches 6, a strong pair, three cards all solidly linked to each other, or a
+chain of three where the middle card links each way through a different role. A hub using one tag with every spoke doesn't, and more groups means online in more games, which is redundancy.
 The score places that turn among the reference decks.
 """
 import csv, os, random, re, statistics, sys
@@ -214,22 +214,38 @@ POWER_OF = {1: 0, 2: 2, 3: 6}
 pw = defaultdict(dict, {x: {y: POWER_OF[w] for y, w in d.items() if POWER_OF[w]} for x, d in wt.items()})
 
 
+def role(x, y):
+    """How x takes part in its solid links with y, as a set of (direction, tag)."""
+    out = {('makes', t) for t in tags[x]['makes'].keys() & tags[y]['uses'].keys() if min(tags[x]['makes'][t], tags[y]['uses'][t]) >= 2}
+    return out | {('uses', t) for t in tags[x]['uses'].keys() & tags[y]['makes'].keys() if min(tags[x]['uses'][t], tags[y]['makes'][t]) >= 2}
+
+
+reach = defaultdict(int, {x: max(d.values()) for x, d in pw.items() if d})  # the best link each card can be part of
+roles = defaultdict(dict, {x: {y: frozenset(role(x, y)) for y in d} for x, d in pw.items()})
+
+
 def assemble(avail, budget, peak):
     """Power of the best castable group of up to 3 cards: each card fits one turn's mana, together they fit the budget."""
     ok = [c for c in avail if avail[c] <= peak]
     best = 0
     for x in ok:
         for y, wxy in pw[x].items():
-            if y not in avail or avail[y] > peak or y <= x or avail[x] + avail[y] > budget:
+            if y not in avail or avail[y] > peak or avail[x] + avail[y] > budget:
                 continue
             best = max(best, wxy)
             if best >= POWER:
                 return best
-            for z, wxz in pw[x].items():  # a triple counts only when all three cards link to each other
-                if z > y and z in avail and z in pw[y] and avail[x] + avail[y] + avail[z] <= budget and avail[z] <= peak:
+            # A triple with x in the middle counts when all three link to each other, or when x links each way through a
+            # different role, like a sac outlet using creatures and making deaths. A hub using the same tag twice doesn't.
+            for z, wxz in pw[x].items():
+                if z == y or z not in avail or avail[z] > peak or avail[x] + avail[y] + avail[z] > budget:
+                    continue
+                if z in pw[y]:
                     best = max(best, wxy + wxz + pw[y][z])
-                    if best >= POWER:
-                        return best
+                elif roles[x][y] != roles[x][z] or len(roles[x][y] | roles[x][z]) > 1:
+                    best = max(best, POWER)
+                if best >= POWER:
+                    return best
     return best
 
 
@@ -289,11 +305,15 @@ for _ in range(SIMS):
         inplay = set(play + waking)
         avail = {c: (0 if c in inplay else cost(c)) + tags[c]['fire'] for c in seen if pw.get(c)}
         avail[commander] = (0 if cast_cmdr else deck[commander]['mv']) + tags[commander]['fire']
-        for tu in [c for c in seen if c in findable]:
+        # Each tutor fetches the card that adds the most power to what's available, or with nothing to finish, the strongest
+        # engine piece, so the next tutor can complete it. A commander with finds tutors once it's in play.
+        users = [c for c in seen if c in findable] + ([commander] if cast_cmdr and commander in findable else [])
+        for tu in sorted(users, key=lambda c: avail.get(c, cost(c))):
+            pay = tags[tu]['fire'] if tu == commander else cost(tu)
             best = max((c for c in findable[tu] if c not in avail),
-                       key=lambda c: sum(pw[c].get(x, 0) for x in avail), default=None)
-            if best and any(x in avail for x in pw[best]):
-                avail[best] = cost(best) + cost(tu) + tags[best]['fire']
+                       key=lambda c: (sum(pw[c].get(x, 0) for x in avail), reach[c]), default=None)
+            if best and reach[best]:
+                avail[best] = cost(best) + pay + tags[best]['fire']
         if found is None and assemble(avail, banked + once, peak) >= POWER:
             found = t
         if found and t >= 4:  # play on to turn 4 so the mana figures cover every game
@@ -304,7 +324,7 @@ for t in mana_at:
 avg_online = statistics.mean(online)
 by = lambda T: sum(o <= T for o in online) / SIMS
 
-# Score, placed among the reference decks. Each bracket's median online turn anchors a score.
+# Score, placed among the reference decks. Bracket targets, fitted against each deck's online turn.
 TARGET = {1: 20, 2: 40, 3: 60, 4: 75, 5: 92}
 ref = list(csv.DictReader(open(REF), delimiter='\t')) if os.path.exists(REF) else []
 if record:
@@ -316,16 +336,18 @@ if record:
 med = defaultdict(list)
 for r in ref:
     med[int(r['bracket'])].append(float(r['online']))
-anchors = sorted([(statistics.median(v), TARGET[b]) for b, v in med.items()] + [(2.0, 100), (LAST + 1.0, 0)])
-
-
-def place(x):
-    for (x0, y0), (x1, y1) in zip(anchors, anchors[1:]):
-        if x0 <= x <= x1:
-            return y0 + (y1 - y0) * (x - x0) / (x1 - x0) if x1 > x0 else y0
-    return 100 if x < anchors[0][0] else 0
-
-
+# A straight line through every reference deck, bracket score against online turn, so the score is always monotonic
+xs = [float(r['online']) for r in ref]
+ys = [TARGET[int(r['bracket'])] for r in ref]
+if len(ref) >= 3 and len(set(xs)) > 1:
+    mx, my = statistics.mean(xs), statistics.mean(ys)
+    sxy = sum((x - mx) * (y - my) for x, y in zip(xs, ys))
+    sxx = sum((x - mx) ** 2 for x in xs)
+    syy = sum((y - my) ** 2 for y in ys) or 1
+    slope, icept, corr = sxy / sxx, my - sxy / sxx * mx, sxy / (sxx * syy) ** 0.5
+else:
+    slope, icept, corr = -100 / (LAST - 1), 100 + 200 / (LAST - 1), None
+place = lambda x: icept + slope * x
 score = max(0, min(100, place(avg_online)))
 
 # Diagnostics, not scored
@@ -346,7 +368,8 @@ used_tags = {t for n in tags for t in tags[n]['uses']}
 
 print(f'## Score {score:.0f} / 100\n')
 print(f'Engine turn {avg_online:.1f}, the first turn a castable strong pair or fully linked triple is assembled, never counted as {LAST + 1}. '
-      f'Reference decks, {len(ref)}: ' + (', '.join(f'bracket {b} median {statistics.median(v):.1f}' for b, v in sorted(med.items())) or 'none') + '.\n')
+      f'Reference decks, {len(ref)}: ' + (', '.join(f'bracket {b} median {statistics.median(v):.1f}' for b, v in sorted(med.items())) or 'none')
+      + (f', fit correlation {corr:.2f}' if corr is not None else '') + '.\n')
 print('| By turn | 3 | 4 | 5 | 6 | 8 | 10 |\n|---|---|---|---|---|---|---|')
 print('| Online | ' + ' | '.join(f'{by(T):.0%}' for T in (3, 4, 5, 6, 8, 10)) + ' |')
 if share3 > 0.10 and pairs > 5:

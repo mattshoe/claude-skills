@@ -165,6 +165,5 @@ logs is worse than no log.
 ## Related skills
 
 **api** is how to use the API — read that first for the data shape and the
-query gotchas. `add-cards` / `remove-cards` edit the collection.
-`build-deck` builds a deck from unassigned cards. This skill is the
-machinery underneath them.
+query gotchas. `add-cards` / `remove-cards` edit the collection. This skill is the machinery underneath
+them.

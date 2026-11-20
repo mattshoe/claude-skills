@@ -5,7 +5,8 @@ Usage: graph.py deck.tsv tags.tsv "SYNERGY 1" ["SYNERGY 2" ...] [--base Mana=47 
                 [--reference "DECK NAME" BRACKET]   adds this deck to reference.tsv
 
 tags.tsv columns: name, category, also, makes, uses, reason, finds, mana, modifies, cards, fire
-- also, makes and uses are comma-separated. also may hold Elite. makes and uses tags carry a strength, dinosaur:3, 1 to 3.
+- also, makes and uses are comma-separated. also may hold Elite. makes and uses tags carry a strength, dinosaur:2, 1 or 2.
+Combos come from Commander Spellbook in <deck>.combos.tsv next to deck.tsv, written by spellbook.py.
 - finds, tutors only, semicolon-separated: any, a front-face card type, a tag, a card name, or mv=N.
 - mana, mana sources only: amount and timing, "2 now", "1 next", "3 once". now taps the turn it lands, next from the
   following turn, once is spent a single time. Lands without a row make 1, tapped lands from next turn.
@@ -15,8 +16,8 @@ tags.tsv columns: name, category, also, makes, uses, reason, finds, mana, modifi
 
 The simulator knows nothing about specific cards. Each game it plays a land, casts mana sources cheapest first, casts the
 commander once it can, casts draw sources, and lets each tutor fetch the card that adds the most link weight. Each turn
-it looks for the best castable group of up to 3 cards. A strong link is worth 6, a solid link 2, a weak one nothing.
-The engine is online the first turn a group reaches 6, a strong pair, three cards all solidly linked to each other, or a
+it looks for the best castable group of up to 3 cards. A combo is worth 6, a solid link 2, a weak one nothing.
+The engine is online the first turn a group reaches 6, a Spellbook combo, three cards all solidly linked to each other, or a
 chain of three where the middle card links each way through a different role. A hub using one tag with every spoke doesn't, and more groups means online in more games, which is redundancy.
 The score places that turn among the reference decks.
 """
@@ -57,8 +58,8 @@ def strengths(s, name):
     out = {}
     for t in split(s):
         tag, _, w = t.lower().partition(':')
-        if w not in ('1', '2', '3'):
-            errors.append(f'needs a strength of 1, 2 or 3: {t} on {name}')
+        if w not in ('1', '2'):
+            errors.append(f'needs a strength of 1 or 2: {t} on {name}. Strong links come from Spellbook combos, not tags')
             w = '2'
         out[tag.strip()] = int(w)
     return out
@@ -163,7 +164,6 @@ def can_find(tutor, c):
 
 
 findable = {tu: {c for c in tags if c != tu and not deck[c]['cmdr'] and can_find(tu, c)} for tu in tutors}
-strong = defaultdict(set, {x: {y for y, w in d.items() if w == 3} for x, d in wt.items()})
 solid = defaultdict(set, {x: {y for y, w in d.items() if w >= 2} for x, d in wt.items()})
 nbr = defaultdict(set, {x: {y for y, w in d.items() if w >= 2} for x, d in wt.items()})
 for tu in tutors:  # a tutor holds the engine together by reaching the cards it can fetch
@@ -210,7 +210,7 @@ online, mana_at = [], defaultdict(float)
 
 # What each link strength adds to engine power. A strong pair alone is the engine, three cards all linked solidly to
 # each other are too, weak links are incidental and add nothing
-POWER_OF = {1: 0, 2: 2, 3: 6}
+POWER_OF = {1: 0, 2: 2}
 pw = defaultdict(dict, {x: {y: POWER_OF[w] for y, w in d.items() if POWER_OF[w]} for x, d in wt.items()})
 
 
@@ -220,6 +220,19 @@ def role(x, y):
     return out | {('uses', t) for t in tags[x]['uses'].keys() & tags[y]['makes'].keys() if min(tags[x]['uses'][t], tags[y]['makes'][t]) >= 2}
 
 
+# Spellbook combos next to the deck file. Every pair inside a combo gets power 6 split across the combo, so a two-card combo
+# is online by itself and a three-card one needs all three
+combos = []
+cf = re.sub(r'\.tsv$', '', deck_f) + '.combos.tsv'
+if os.path.exists(cf):
+    for r in csv.DictReader(open(cf), delimiter='\t'):
+        cs = [c.strip() for c in r['cards'].split(';') if c.strip() in deck]
+        if len(cs) >= 2:
+            combos.append(cs)
+            for x in cs:
+                for y in cs:
+                    if x != y:
+                        pw[x][y] = max(pw[x].get(y, 0), -(-POWER // (len(cs) - 1)))
 reach = defaultdict(int, {x: max(d.values()) for x, d in pw.items() if d})  # the best link each card can be part of
 roles = defaultdict(dict, {x: {y: frozenset(role(x, y)) for y in d} for x, d in pw.items()})
 
@@ -358,24 +371,25 @@ have = {'Mana': lands + sum(deck[n]['qty'] for n in spells if fills(n, 'Ramp')),
 multi = sum(deck[n]['qty'] for n in spells if tags[n]['also']) / N
 avg_mv = sum(cost(n) * deck[n]['qty'] for n in spells) / N
 cheap = sum(deck[n]['qty'] for n in spells if cost(n) <= 2 and (fills(n, 'Removal') or fills(n, 'Protection')))
-pairs = sum(len(v) for v in strong.values()) // 2
-all_links = sum(len(v) for v in wt.values()) // 2 or 1
-share3 = pairs / all_links
+all_links = sum(len(v) for v in wt.values()) // 2
+in_combos = defaultdict(int)
+for cs in combos:
+    for c in cs:
+        in_combos[c] += 1
 orphans = sorted(n for n in engine_cards if not wt[n] and not deck[n]['cmdr'] and n not in tutors)
-hubs = sorted(tags, key=lambda n: -len(strong[n]))[:3]
+hubs = sorted(tags, key=lambda n: (-in_combos[n], -len(solid[n])))[:3]
 made_tags = {t for n in tags for t in tags[n]['makes']}
 used_tags = {t for n in tags for t in tags[n]['uses']}
 
 print(f'## Score {score:.0f} / 100\n')
-print(f'Engine turn {avg_online:.1f}, the first turn a castable strong pair or fully linked triple is assembled, never counted as {LAST + 1}. '
+print(f'Engine turn {avg_online:.1f}, the first turn a castable combo or linked triple is assembled, never counted as {LAST + 1}. '
       f'Reference decks, {len(ref)}: ' + (', '.join(f'bracket {b} median {statistics.median(v):.1f}' for b, v in sorted(med.items())) or 'none')
       + (f', fit correlation {corr:.2f}' if corr is not None else '') + '.\n')
 print('| By turn | 3 | 4 | 5 | 6 | 8 | 10 |\n|---|---|---|---|---|---|---|')
 print('| Online | ' + ' | '.join(f'{by(T):.0%}' for T in (3, 4, 5, 6, 8, 10)) + ' |')
-if share3 > 0.10 and pairs > 5:
-    print(f'\nWARNING: {share3:.0%} of links are strength 3. A 3 means the two cards alone push toward winning, so check them in review.')
 print('\n## Diagnostics\n\n| Measure | Value |\n|---|---|')
-print(f'| Links of 3, 2 and 1 | {pairs}, {sum(len(v) for v in solid.values()) // 2 - pairs}, {all_links - sum(len(v) for v in solid.values()) // 2} |')
+print(f'| Spellbook combos | {len(combos)} |')
+print(f"| Links of 2 and 1 | {sum(len(v) for v in solid.values()) // 2}, {all_links - sum(len(v) for v in solid.values()) // 2} |")
 print(f'| Engine share, links of 2 or more | {engine():.0%} |')
 print(f'| Multi-role or Elite spells | {multi:.0%} |')
 print(f'| Mana made on turns 2, 3, 4 | {mana_at[2]:.1f}, {mana_at[3]:.1f}, {mana_at[4]:.1f} |')
@@ -387,9 +401,9 @@ print('\n## Categories, primary or also\n\n| Category | Cards |\n|---|---|')
 for c in cats:
     print(f'| {c} | {count[c]} |')
 print(f'| Lands | {lands} |')
-print('\n## Hubs, most strong links\n')
+print('\n## Hubs, most combos then most solid links\n')
 for h in hubs:
-    print(f'- {h}: strong links {len(strong[h])}, engine share without it {engine(h):.0%}')
+    print(f'- {h}: in {in_combos[h]} combos, {len(solid[h])} solid links, engine share without it {engine(h):.0%}')
 print(f'\n## Orphans, {len(orphans)} engine cards with no link\n')
 for o in orphans:
     print(f'- {o} ({tags[o]["cat"]})')

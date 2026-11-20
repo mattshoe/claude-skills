@@ -18,6 +18,14 @@ From a pasted list, save it to `$SCRATCH/list.txt` as is, then:
 python3 <skill base directory>/deck.py --list $SCRATCH/list.txt --commander "COMMANDER NAME" > $SCRATCH/deck.tsv
 ```
 
+Then fetch the deck's combos from Commander Spellbook, one call for the whole list:
+
+```sh
+python3 <skill base directory>/spellbook.py $SCRATCH/deck.tsv > $SCRATCH/deck.combos.tsv
+```
+
+graph.py reads `deck.combos.tsv` next to `deck.tsv` on its own. Combos are the only strong links, nobody tags them by hand.
+
 Lines like `1 Sol Ring`, `1x Sol Ring (CMM) 400` and `*CMDR*` marks all parse. Ask the user for the commander if the list doesn't make it clear. Any `NOT FOUND` on stderr means a misspelt name, so fix it and rerun. Read deck.tsv before going on.
 
 ## 2. Synergy categories
@@ -48,7 +56,7 @@ Spawn one agent with deck.tsv, the deck-architecture path, the categories and th
 - `cards` is for card draw sources, same format as `mana`. Rhystic Study or Phyrexian Arena is `1 next`, Sylvan Library `1 now`, Brainstorm `2 once`, Night's Whisper `2 once`. Count only reliable extra cards, not conditional ones you can't count on.
 - `fire` is extra mana a card needs before its links work, on top of casting it. Najeela is `5` for WUBRG, a sac outlet with a {1} cost is `1`. Blank means 0.
 - The commander gets makes and uses like any card. The simulation puts it in play once there's mana for it, so a cheap commander's links count almost every draw and a 10-drop's rarely do. Tag a flip commander by both faces.
-- Give every makes and uses tag a strength, like `dinosaur:3`, using this test on the pair. **3**, these two cards alone push the game toward winning, like Thassa's Oracle with Demonic Consultation, Kinnan with Basalt Monolith, or a sac outlet with a payoff that drains the table. **2**, a real link that does work but needs more cards to matter, like Pantlaza with a mid-sized Dinosaur. **1**, incidental, like an anthem or a minor bonus. A link counts the weaker of its two sides, so a 1-toughness Dinosaur is `dinosaur:1` even though Pantlaza uses `dinosaur:3`. Strength 3 should be rare. graph.py warns when more than 10% of links are 3 in a deck with more than 5 of them. In a three-card combo, tag it so every piece links to the other two. When a strength depends on stats, like toughness for Pantlaza, set the cut-offs once from the pt column, write them in the first reason, and apply them to every card. graph.py fails on a tag without a strength.
+- Give every makes and uses tag a strength of 1 or 2, like `dinosaur:2`, by answering three yes or no questions about the link. Does it fire every time, not only sometimes? Does its output grow with the board, not stay fixed? Is it on the deck's main chain, not a side bonus? Two or more yeses is 2, otherwise 1. Write the answers in the reason as `yyn` and the like for any card whose strength isn't obvious. A link counts the weaker of its two sides, so a 1-toughness Dinosaur is `dinosaur:1` even though Pantlaza uses `dinosaur:2`. There's no 3. Combos that win on their own come from Spellbook, and graph.py rejects a 3. When the answers depend on stats, like toughness for Pantlaza, set the cut-offs once from the pt column, write them in the first reason, and apply them to every card. graph.py fails on a tag without a strength.
 - Don't tag the same link twice. If every Dinosaur entering is the whole point, `dinosaur` covers it, so don't add `etb` at the same strength. Two cards feeding each other both ways is a loop, not a duplicate, so tag both directions.
 - Every tag made must be used by something in the deck and the other way round. A tag with only one side is either a mistake or an effect the engine doesn't care about, so drop it.
 - Use card names exactly as in deck.tsv.
@@ -63,7 +71,7 @@ python3 <skill base directory>/graph.py $SCRATCH/deck.tsv $SCRATCH/tags.tsv "<sy
 
 It fails on a missing, repeated or unknown card or category, or a tag without a strength. Send failures back to the tagging agent until it passes.
 
-**Review loop.** Each round, spawn 3 agents with deck.tsv, the deck-architecture path, the categories and tags.tsv. Each looks for tags that link cards that don't really work together, missing tags on cards that do, strengths set too high or too low, Elite on cards that aren't, tutors with wrong or missing finds, and wrong categories. Rules details count here, like "another creature", exact damage amounts or who controls the source. Each returns "no meaningful change" or a list of fixes, card, change and why. Apply fixes 2 of 3 back, or that are clearly right on the oracle text. Rerun graph.py. Stop when a round applies nothing, or after 3 rounds with the disputes listed.
+**Review loop.** Each round, spawn 3 agents with deck.tsv, the deck-architecture path, the categories and tags.tsv. Each looks for tags that link cards that don't really work together, missing tags on cards that do, strengths whose yes or no answers are wrong, Elite on cards that aren't, tutors with wrong or missing finds, and wrong categories. Rules details count here, like "another creature", exact damage amounts or who controls the source. Each returns "no meaningful change" or a list of fixes, card, change and why. Apply fixes 2 of 3 back, or that are clearly right on the oracle text. Rerun graph.py. Stop when a round applies nothing, or after 3 rounds with the disputes listed.
 
 ## 4. Score
 
@@ -71,13 +79,13 @@ graph.py builds the graph, where two cards are linked when one makes a tag the o
 
 Then it plays 10,000 games to turn 10. It knows nothing about specific cards, only the tags. Each turn it plays a land, preferring an untapped one, casts mana sources cheapest first, applies modifiers, and casts the commander once it can. Each tutor fetches the card that completes the most strong links.
 
-**The engine is online** the first turn the simulation can assemble a castable group of up to 3 cards, in hand, in play, fetched or the commander, that's a strong pair, three cards all linked to each other at 2 or more, or a chain of three at 2 or more where the middle card links each way through a different role, like fodder into a sac outlet into a death payoff. Each card has to fit one turn's mana, and together they have to fit the mana left over so far, `fire` included. A hub that uses one tag with every spoke doesn't count, so the commander plus two rocks or three tribe members isn't an engine. A real three-card combo has to be tagged so all three pieces link to each other. More such groups in the deck means online in more games, which is redundancy, the deck-architecture rule that probabilities are king. Draw sources from the `cards` column make the simulation see more cards, so card advantage speeds the engine up like ramp does.
+**The engine is online** the first turn the simulation can assemble a castable group of up to 3 cards, in hand, in play, fetched or the commander, that's a Spellbook combo, three cards all linked to each other at 2, or a chain of three at 2 where the middle card links each way through a different role, like fodder into a sac outlet into a death payoff. Each card has to fit one turn's mana, and together they have to fit the mana left over so far, `fire` included. A hub that uses one tag with every spoke doesn't count, so the commander plus two rocks or three tribe members isn't an engine. Spellbook combos of any size count once all their pieces are there. More such groups in the deck means online in more games, which is redundancy, the deck-architecture rule that probabilities are king. Draw sources from the `cards` column make the simulation see more cards, so card advantage speeds the engine up like ramp does.
 
 **The score** comes from the reference decks in `<skill base directory>/reference.tsv`, real lists with known brackets tagged under these rules. Each bracket has a target, 1 at 20, 2 at 40, 3 at 60, 4 at 75 and 5 at 92, and graph.py fits a straight line from online turn to that target across every reference deck. The deck's score is read off the line. To add a reference deck, run graph.py with `--reference "DECK NAME" BRACKET`, then commit reference.tsv.
 
 With 20 reference decks the fit correlation is 0.74. Online turn cleanly separates bracket 1, around turn 9 and later, from everything else, and the fastest cEDH decks come online by turn 4. Brackets 2 to 4 overlap a lot, between turns 5 and 7, so the score is reliable at the ends and rough in the middle. Brackets in the middle differ mostly by card quality and interaction, which the engine turn doesn't measure, and Archidekt brackets are self-reported.
 
-The diagnostics under the score aren't scored. They explain it. Few strong links means a loose engine. Low mana on turn 3 means slow ramp. Orphans are engine cards with no link. Dangling tags point at a half-built step in the chain or a tagging mistake. Hubs show the cards with the most strong links and what the engine looks like without each.
+The diagnostics under the score aren't scored. They explain it. No Spellbook combos and few solid links means a loose engine. Low mana on turn 3 means slow ramp. Orphans are engine cards with no link. Dangling tags point at a half-built step in the chain or a tagging mistake. Hubs show the cards in the most combos and with the most solid links, and what the engine looks like without each.
 
 ## 5. Output
 
@@ -87,6 +95,7 @@ Write the full report to `~/Documents/mtg/<deck name>/synergy.md`, with the deck
 
 ## Change log
 
+- 2026-11-20: Strong links come from Commander Spellbook combos, not tags. Taggers pick 1 or 2 with three yes or no questions, to cut tagger variance.
 - 2026-11-20: 20 reference decks across all 5 brackets from Archidekt. Score is a fitted line, correlation 0.74. Chains of three count when the middle card changes role, tutors chain and commanders with finds tutor.
 - 2026-11-20: Online needs a strong pair or a fully linked triple, so hubs with loose spokes don't count.
 - 2026-11-20: Engine power replaces pairs, so triples and redundancy count. Strength has a test, 3 means the pair alone pushes toward winning. New `cards` and `fire` columns for card draw and activation costs. One-shot mana is spent once.
